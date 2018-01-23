@@ -1,0 +1,5 @@
+#core files
+AUX_SOURCE_DIRECTORY(. DIR_KSD_CORE_SRC)
+
+#build core
+ADD_LIBRARY(ksd ${DIR_KSD_CORE_SRC})

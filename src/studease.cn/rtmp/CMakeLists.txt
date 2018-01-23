@@ -1,0 +1,5 @@
+#rtmp files
+AUX_SOURCE_DIRECTORY(. DIR_STU_RTMP_SRC)
+
+#build rtmp
+ADD_LIBRARY(rtmp ${DIR_STU_RTMP_SRC})

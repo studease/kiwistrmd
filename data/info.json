@@ -1,0 +1,13 @@
+﻿{
+	"status":  true,
+	"user": {
+		"name": "tony",
+		"role":  2
+	},
+	"stream": {
+		"app":  "live",
+		"inst": "_definst_",
+		"name": "sample",
+		"state": 0
+	}
+}
