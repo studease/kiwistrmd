@@ -82,7 +82,7 @@ again:
 	}
 
 	if (n == 0) {
-		stu_log_debug(4, "rtmp client has closed connection: fd=%d.", c->fd);
+		stu_log_debug(4, "rtmp handshaker client has closed connection: fd=%d.", c->fd);
 		goto failed;
 	}
 

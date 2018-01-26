@@ -7,8 +7,6 @@
 
 #include "stu_rtmp.h"
 
-static stu_rtmp_chunk_t *stu_rtmp_get_chunk(stu_rtmp_request_t *r, stu_uint8_t fmt, stu_uint32_t csid);
-
 
 stu_int32_t
 stu_rtmp_parse_handshake(stu_rtmp_handshake_t *h, stu_buf_t *b) {
@@ -189,7 +187,7 @@ stu_rtmp_parse_chunk(stu_rtmp_request_t *r, stu_buf_t *b) {
 					return STU_ERROR;
 				}
 
-				if (ck->fmt == 3) {
+				if (ck->basic.fmt == 3) {
 					state = ck->extended ? sw_extm_0 : sw_data;
 				} else {
 					state = sw_time_0;
@@ -214,7 +212,7 @@ stu_rtmp_parse_chunk(stu_rtmp_request_t *r, stu_buf_t *b) {
 				return STU_ERROR;
 			}
 
-			if (ck->fmt == 3) {
+			if (ck->basic.fmt == 3) {
 				state = ck->extended ? sw_extm_0 : sw_data;
 			} else {
 				state = sw_time_0;
@@ -222,18 +220,18 @@ stu_rtmp_parse_chunk(stu_rtmp_request_t *r, stu_buf_t *b) {
 			break;
 
 		case sw_time_0:
-			ck->timestamp = ch << 16;
+			ck->header.timestamp = ch << 16;
 			state = sw_time_1;
 			break;
 
 		case sw_time_1:
-			ck->timestamp |= ch << 8;
+			ck->header.timestamp |= ch << 8;
 			state = sw_time_2;
 			break;
 
 		case sw_time_2:
-			ck->timestamp |= ch;
-			if (ck->timestamp == 0xFFFFFF) {
+			ck->header.timestamp |= ch;
+			if (ck->header.timestamp == 0xFFFFFF) {
 				ck->extended = TRUE;
 			}
 
@@ -245,24 +243,24 @@ stu_rtmp_parse_chunk(stu_rtmp_request_t *r, stu_buf_t *b) {
 			break;
 
 		case sw_mlen_0:
-			ck->payload.size = ch << 16;
+			ck->header.message_len = ch << 16;
 			state = sw_mlen_1;
 			break;
 
 		case sw_mlen_1:
-			ck->payload.size |= ch << 8;
+			ck->header.message_len |= ch << 8;
 			state = sw_mlen_2;
 			break;
 
 		case sw_mlen_2:
-			ck->payload.size |= ch;
+			ck->header.message_len |= ch;
 			state = sw_mtid;
 			break;
 
 		case sw_mtid:
-			ck->type = ch;
+			ck->header.type = ch;
 
-			if (ck->fmt == 1) {
+			if (ck->basic.fmt == 1) {
 				state = ck->extended ? sw_extm_0 : sw_data;
 			} else {
 				state = sw_msid_0;
@@ -270,54 +268,55 @@ stu_rtmp_parse_chunk(stu_rtmp_request_t *r, stu_buf_t *b) {
 			break;
 
 		case sw_msid_0:
-			ck->msid = ch;
+			ck->header.stream_id = ch;
 			state = sw_msid_1;
 			break;
 
 		case sw_msid_1:
-			ck->msid |= ch << 8;
+			ck->header.stream_id |= ch << 8;
 			state = sw_msid_2;
 			break;
 
 		case sw_msid_2:
-			ck->msid |= ch << 16;
+			ck->header.stream_id |= ch << 16;
 			state = sw_msid_3;
 			break;
 
 		case sw_msid_3:
-			ck->msid |= ch << 24;
+			ck->header.stream_id |= ch << 24;
 			state = ck->extended ? sw_extm_0 : sw_data;
 			break;
 
 		case sw_extm_0:
-			ck->timestamp = ch << 24;
+			ck->header.timestamp = ch << 24;
 			state = sw_extm_1;
 			break;
 
 		case sw_extm_1:
-			ck->timestamp |= ch << 16;
+			ck->header.timestamp |= ch << 16;
 			state = sw_extm_2;
 			break;
 
 		case sw_extm_2:
-			ck->timestamp |= ch << 8;
+			ck->header.timestamp |= ch << 8;
 			state = sw_extm_3;
 			break;
 
 		case sw_extm_3:
-			ck->timestamp |= ch;
+			ck->header.timestamp |= ch;
 			state = sw_data;
 			break;
 
 		case sw_data:
 			if (ck->payload.start == NULL) {
-				ck->payload.start = stu_calloc(ck->payload.size + 1);
+				ck->payload.start = stu_calloc(ck->header.message_len + 1);
 				if (ck->payload.start == NULL) {
 					return STU_ERROR;
 				}
 
 				ck->payload.pos = ck->payload.last = ck->payload.start;
-				ck->payload.end = ck->payload.start + ck->payload.size;
+				ck->payload.end = ck->payload.start + ck->header.message_len;
+				ck->payload.size = ck->header.message_len;
 			}
 
 			n = (ck->payload.last - ck->payload.start) % r->nc->far_chunk_size;
@@ -334,6 +333,7 @@ stu_rtmp_parse_chunk(stu_rtmp_request_t *r, stu_buf_t *b) {
 
 			ck->payload.last = stu_memcpy(ck->payload.last, p, len);
 			if (ck->payload.last == ck->payload.end) {
+				r->chunk_in = ck;
 				state = sw_fmt;
 				goto done;
 			}
@@ -356,34 +356,4 @@ done:
 	r->state = ck->state = state;
 
 	return STU_OK;
-}
-
-static stu_rtmp_chunk_t *
-stu_rtmp_get_chunk(stu_rtmp_request_t *r, stu_uint8_t fmt, stu_uint32_t csid) {
-	stu_rtmp_chunk_t *ck;
-	stu_queue_t      *q;
-
-	ck = NULL;
-
-	if (fmt == 0) {
-		ck = stu_calloc(sizeof(stu_rtmp_chunk_t));
-		if (ck == NULL) {
-			stu_log_error(0, "Failed to calloc rtmp chunk.");
-			return NULL;
-		}
-
-		ck->fmt = 0;
-		ck->csid = csid;
-	} else {
-		for (q = stu_queue_tail(&r->chunks); q != stu_queue_sentinel(&r->chunks); q = stu_queue_prev(q)) {
-			ck = stu_queue_data(q, stu_rtmp_chunk_t, queue);
-			if (ck->state || ck->csid == csid) {
-				ck->fmt = fmt;
-				ck->csid = csid;
-				break;
-			}
-		}
-	}
-
-	return ck;
 }

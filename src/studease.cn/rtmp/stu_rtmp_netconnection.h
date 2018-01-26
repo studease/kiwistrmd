@@ -19,10 +19,6 @@ typedef struct {
 	stu_uint32_t      msg_in;
 	stu_uint32_t      msg_out;
 	stu_uint32_t      msg_dropped;
-} stu_rtmp_admin_stat_t;
-
-typedef struct {
-	stu_rtmp_admin_stat_t *admin;
 
 	stu_uint32_t      ping_rtt;
 
@@ -46,8 +42,8 @@ typedef struct {
 typedef struct {
 	stu_connection_t *connection;
 
-	stu_uint32_t      far_chunk_size;
-	stu_uint32_t      near_chunk_size;
+	stu_int32_t       far_chunk_size;
+	stu_int32_t       near_chunk_size;
 	stu_uint32_t      far_ack_window_size;
 	stu_uint32_t      near_ack_window_size;
 	stu_uint32_t      far_bandwidth;

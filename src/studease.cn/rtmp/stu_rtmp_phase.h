@@ -10,7 +10,7 @@
 
 #include "stu_rtmp.h"
 
-typedef stu_int32_t (*stu_rtmp_phase_handler_pt)(stu_rtmp_message_t *r);
+typedef stu_int32_t (*stu_rtmp_phase_handler_pt)(stu_rtmp_request_t *r);
 
 struct stu_rtmp_phase_s {
 	stu_rtmp_phase_handler_pt  handler;

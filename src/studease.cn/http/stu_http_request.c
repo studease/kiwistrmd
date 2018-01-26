@@ -590,7 +590,6 @@ stu_http_request_write_handler(stu_http_request_t *r) {
 	}
 
 	c = r->connection;
-
 	c->timedout = FALSE;
 
 	stu_log_debug(4, "http run request: \"%s\"", r->uri.data);
