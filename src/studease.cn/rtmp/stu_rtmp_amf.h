@@ -10,6 +10,9 @@
 
 #include "stu_rtmp.h"
 
+#define STU_RTMP_AMF0               0x00
+#define STU_RTMP_AMF3               0x03
+
 #define STU_RTMP_AMF_DOUBLE         0x00
 #define STU_RTMP_AMF_BOOLEAN        0x01
 #define STU_RTMP_AMF_STRING         0x02
@@ -49,7 +52,7 @@ typedef struct {
 	void  (*free_fn)(void *ptr);
 } stu_rtmp_amf_hooks_t;
 
-void  stu_rtmp_amf_init_hooks(stu_rtmp_amf_hooks_t *hooks);
+void            stu_rtmp_amf_init_hooks(stu_rtmp_amf_hooks_t *hooks);
 
 stu_rtmp_amf_t *stu_rtmp_amf_create(stu_uint8_t type, stu_str_t *key);
 stu_rtmp_amf_t *stu_rtmp_amf_create_number(stu_str_t *key, stu_double_t num);
@@ -66,8 +69,8 @@ stu_rtmp_amf_t *stu_rtmp_amf_create_date(stu_str_t *key, stu_double_t ts, stu_ui
 
 stu_rtmp_amf_t *stu_rtmp_amf_duplicate(stu_rtmp_amf_t *item, stu_bool_t recurse);
 
-void  stu_rtmp_amf_add_item_to_array(stu_rtmp_amf_t *array, stu_rtmp_amf_t *item);
-void  stu_rtmp_amf_add_item_to_object(stu_rtmp_amf_t *object, stu_rtmp_amf_t *item);
+void            stu_rtmp_amf_add_item_to_array(stu_rtmp_amf_t *array, stu_rtmp_amf_t *item);
+void            stu_rtmp_amf_add_item_to_object(stu_rtmp_amf_t *object, stu_rtmp_amf_t *item);
 
 stu_rtmp_amf_t *stu_rtmp_amf_get_array_item_at(stu_rtmp_amf_t *array, stu_int32_t index);
 stu_rtmp_amf_t *stu_rtmp_amf_get_object_item_by(stu_rtmp_amf_t *object, stu_str_t *key);
@@ -75,10 +78,10 @@ stu_rtmp_amf_t *stu_rtmp_amf_get_object_item_by(stu_rtmp_amf_t *object, stu_str_
 stu_rtmp_amf_t *stu_rtmp_amf_remove_item_from_array(stu_rtmp_amf_t *array, stu_int32_t index);
 stu_rtmp_amf_t *stu_rtmp_amf_remove_item_from_object(stu_rtmp_amf_t *object, stu_str_t *key);
 
-void  stu_rtmp_amf_delete(stu_rtmp_amf_t *item);
+void            stu_rtmp_amf_delete(stu_rtmp_amf_t *item);
 
-void  stu_rtmp_amf_delete_item_from_array(stu_rtmp_amf_t *array, stu_int32_t index);
-void  stu_rtmp_amf_delete_item_from_object(stu_rtmp_amf_t *object, stu_str_t *key);
+void            stu_rtmp_amf_delete_item_from_array(stu_rtmp_amf_t *array, stu_int32_t index);
+void            stu_rtmp_amf_delete_item_from_object(stu_rtmp_amf_t *object, stu_str_t *key);
 
 stu_rtmp_amf_t *stu_rtmp_amf_parse(u_char *data, size_t len);
 u_char         *stu_rtmp_amf_stringify(stu_rtmp_amf_t *item, u_char *dst);

@@ -92,7 +92,7 @@ again:
 	if (stu_strncmp(c->buffer.start, STU_FLASH_POLICY_FILE_REQUEST.data, STU_FLASH_POLICY_FILE_REQUEST.len) == 0) {
 		n = send(c->fd, STU_FLASH_POLICY_FILE.data, STU_FLASH_POLICY_FILE.len, 0);
 		if (n == -1) {
-			stu_log_debug(4, "Failed to send policy file: fd=%d.", c->fd);
+			stu_log_error(stu_errno, "Failed to send policy file: fd=%d.", c->fd);
 			goto failed;
 		}
 
@@ -118,7 +118,7 @@ failed:
 
 done:
 
-	stu_log_debug(4, "rtmp handshake done: state=%d.", ((stu_rtmp_handshake_t *) c->request)->state);
+	return;
 
 	//stu_mutex_unlock(&c->lock);
 }
@@ -254,11 +254,6 @@ stu_rtmp_finalize_handshake(stu_rtmp_handshake_t *h, stu_int32_t rc) {
 	stu_log_debug(4, "rtmp finalize handshake: %d", rc);
 
 	if (rc == STU_OK) {
-		if (stu_rtmp_validate_client(h->start, &digest, &challenge, &scheme) == STU_ERROR) {
-			stu_log_error(0, "Failed to validate client.");
-			goto failed;
-		}
-
 		// s0
 		*b.last++ = STU_RTMP_VERSION_3;
 
@@ -272,6 +267,11 @@ stu_rtmp_finalize_handshake(stu_rtmp_handshake_t *h, stu_int32_t rc) {
 		b.last += 4;
 
 		if (h->zero) {
+			if (stu_rtmp_validate_client(h->start, &digest, &challenge, &scheme) == STU_ERROR) {
+				stu_log_error(0, "Failed to validate client.");
+				goto failed;
+			}
+
 			b.last = stu_rtmp_fill_random_buffer(b.last, 1496);
 			off = stu_rtmp_find_digest(b.pos, scheme);
 
@@ -305,15 +305,19 @@ stu_rtmp_finalize_handshake(stu_rtmp_handshake_t *h, stu_int32_t rc) {
 		// send s0 & s1 & s2
 		n = send(c->fd, b.start, b.size, 0);
 		if (n == -1) {
-			stu_log_error(0, "Failed to send rtmp handshake packet c0 & c1.");
+			stu_log_error(stu_errno, "Failed to send rtmp handshake packet c0 & c1.");
 			goto failed;
 		}
+
+		c->buffer.end--;
+		c->buffer.size--;
 
 		return;
 	}
 
 	if (rc == STU_DONE) {
 		// TODO: check c2
+		stu_log_debug(4, "rtmp handshake done.");
 
 		c->buffer.start = c->buffer.end = NULL;
 		c->buffer.pos = c->buffer.last = NULL;
@@ -323,6 +327,16 @@ stu_rtmp_finalize_handshake(stu_rtmp_handshake_t *h, stu_int32_t rc) {
 		stu_rtmp_free_handshake(h);
 
 		c->read.handler = stu_rtmp_request_read_handler;
+
+		if (stu_event_del(&c->read, STU_READ_EVENT, 0) == STU_ERROR) {
+			stu_log_error(0, "Failed to del rtmp handshake read event.");
+			return;
+		}
+
+		if (stu_event_add(&c->read, STU_READ_EVENT, STU_CLEAR_EVENT) == STU_ERROR) {
+			stu_log_error(0, "Failed to add rtmp request read event.");
+			return;
+		}
 
 		return;
 	}

@@ -18,8 +18,8 @@ static stu_int32_t  stu_http_upstream_process_unique_header_line(stu_http_reques
 static stu_int32_t  stu_http_upstream_process_content_length(stu_http_request_t *pr, stu_table_elt_t *h, stu_uint32_t offset);
 static stu_int32_t  stu_http_upstream_process_connection(stu_http_request_t *pr, stu_table_elt_t *h, stu_uint32_t offset);
 
-extern const stu_str_t   __NAME;
-extern const stu_str_t   __VERSION;
+extern const stu_str_t  __NAME;
+extern const stu_str_t  __VERSION;
 
 extern stu_http_headers_t  stu_http_upstream_headers_in_hash;
 

@@ -23,6 +23,11 @@ static void  stu_rtmp_handler(stu_event_t *ev);
 
 stu_int32_t
 stu_rtmp_init() {
+	if (stu_rtmp_filter_init_hash() == STU_ERROR) {
+		stu_log_error(0, "Failed to init rtmp filter hash.");
+		return STU_ERROR;
+	}
+
 	if (stu_rtmp_phase_init() == STU_ERROR) {
 		stu_log_error(0, "Failed to init rtmp phase.");
 		return STU_ERROR;

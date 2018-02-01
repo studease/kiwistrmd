@@ -44,7 +44,9 @@ typedef struct {
 	unsigned                 extended:1;
 } stu_rtmp_chunk_t;
 
-stu_rtmp_chunk_t *stu_rtmp_get_chunk(stu_rtmp_request_t *r, stu_uint8_t fmt, stu_uint32_t csid);
+stu_int32_t       stu_rtmp_write_by_chunk(stu_rtmp_request_t *r, stu_rtmp_chunk_t *ck);
+
+stu_rtmp_chunk_t *stu_rtmp_get_chunk(stu_rtmp_request_t *r, stu_uint32_t csid);
 void              stu_rtmp_free_chunk(stu_rtmp_request_t *r, stu_uint32_t csid);
 
 #endif /* STUDEASE_CN_RTMP_STU_RTMP_CHUNK_H_ */

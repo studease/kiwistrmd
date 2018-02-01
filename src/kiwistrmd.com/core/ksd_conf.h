@@ -10,7 +10,7 @@
 
 #include "ksd_core.h"
 
-#define KCD_CONF_MAX_SIZE  4096
+#define KSD_CONF_MAX_SIZE  4096
 
 typedef struct {
 	stu_file_t     log;
@@ -28,12 +28,12 @@ typedef struct {
 	stu_str_t      root;
 	stu_str_t      cors;
 
+	stu_bool_t     push_stat;
+	stu_msec_t     push_stat_interval; // seconds
+
 	uint16_t       http_port;
 	stu_str_t      http_root;
 	stu_str_t      http_cors;
-
-	stu_bool_t     push_stat;
-	stu_msec_t     push_stat_interval; // seconds
 
 	stu_hash_t     target;             // stu_rtmp_target_t *
 	stu_list_t     ident;              // stu_upstream_server_t *

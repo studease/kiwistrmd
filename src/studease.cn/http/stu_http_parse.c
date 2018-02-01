@@ -726,6 +726,7 @@ stu_http_arg(stu_http_request_t *r, u_char *name, size_t len, stu_str_t *value) 
 	}
 
 	last = r->args.data + r->args.len;
+
 	for (p = r->args.data; p < last; p++) {
 		p = stu_strnstr(p, (char *) name, len - 1);
 		if (p == NULL) {

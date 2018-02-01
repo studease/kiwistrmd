@@ -9,6 +9,7 @@
 #define KIWISTRMD_COM_CORE_KSD_CORE_H_
 
 #include "../../studease.cn/websocket/stu_websocket.h"
+#include "../../studease.cn/rtmp/stu_rtmp.h"
 
 typedef enum {
 	PREVIEW      = 0x00,
@@ -26,11 +27,8 @@ typedef struct {
 } ksd_mode_mask_t;
 
 #include "ksd_conf.h"
-/*#include "ksd_protocol.h"
-#include "ksd_user.h"
-#include "ksd_channel.h"
 #include "ksd_request.h"
 #include "ksd_cycle.h"
 #include "ksd_process.h"
-*/
+
 #endif /* KIWISTRMD_COM_CORE_KSD_CORE_H_ */

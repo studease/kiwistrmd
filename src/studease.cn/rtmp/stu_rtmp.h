@@ -13,9 +13,12 @@
 
 #define STU_RTMP_VERSION_3  0x03
 
-typedef struct stu_rtmp_request_s stu_rtmp_request_t;
-typedef struct stu_rtmp_filter_s  stu_rtmp_filter_t;
-typedef struct stu_rtmp_phase_s   stu_rtmp_phase_t;
+typedef struct stu_rtmp_instance_s    stu_rtmp_instance_t;
+typedef struct stu_rtmp_application_s stu_rtmp_application_t;
+typedef struct stu_rtmp_request_s     stu_rtmp_request_t;
+typedef struct stu_rtmp_filter_s      stu_rtmp_filter_t;
+typedef struct stu_rtmp_phase_s       stu_rtmp_phase_t;
+typedef struct stu_rtmp_upstream_s    stu_rtmp_upstream_t;
 
 #include "stu_rtmp_amf.h"
 #include "stu_rtmp_handshake.h"

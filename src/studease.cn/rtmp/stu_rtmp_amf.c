@@ -484,6 +484,7 @@ stu_rtmp_amf_t *
 stu_rtmp_amf_parse(u_char *data, size_t len) {
 	stu_rtmp_amf_t *root;
 	u_char         *err;
+	size_t          n;
 
 	err = NULL;
 
@@ -492,23 +493,26 @@ stu_rtmp_amf_parse(u_char *data, size_t len) {
 		return NULL;
 	}
 
-	stu_rtmp_amf_parse_value(root, data, len, &err);
+	n = stu_rtmp_amf_parse_value(root, data, len, &err);
 	if (err != NULL) {
 		stu_log_error(0, "Failed to parse AMF: %s", err);
 		stu_rtmp_amf_delete(root);
 		return NULL;
 	}
 
+	root->cost = n;
+
 	return root;
 }
 
 static size_t
 stu_rtmp_amf_parse_value(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char **err) {
-	u_char *p;
-	size_t  n;
+	u_char       *p;
+	size_t        n;
+	stu_uint32_t  cost;
 
 	p = data;
-	item->cost = 0;
+	cost = 0;
 
 	if (len < 1) {
 		stu_log_error(0, "Data not enough while decoding AMF value.");
@@ -517,35 +521,35 @@ stu_rtmp_amf_parse_value(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char 
 	}
 
 	item->type = *p++;
-	item->cost++;
+	cost++;
 
 	switch (item->type) {
 	case STU_RTMP_AMF_DOUBLE:
-		n = stu_rtmp_amf_parse_number(item, p, len - item->cost, err);
-		item->cost += n;
+		n = stu_rtmp_amf_parse_number(item, p, len - cost, err);
+		cost += n;
 		break;
 
 	case STU_RTMP_AMF_BOOLEAN:
 		item->value = *p ? TRUE : FALSE;
-		item->cost += 1;
+		cost += 1;
 		break;
 
 	case STU_RTMP_AMF_STRING:
-		n = stu_rtmp_amf_parse_string(item, p, len - item->cost, err);
-		item->cost += n;
+		n = stu_rtmp_amf_parse_string(item, p, len - cost, err);
+		cost += n;
 		break;
 
 	case STU_RTMP_AMF_OBJECT:
-		n = stu_rtmp_amf_parse_object(item, p, len - item->cost, err);
-		item->cost += n;
+		n = stu_rtmp_amf_parse_object(item, p, len - cost, err);
+		cost += n;
 		break;
 
 	case STU_RTMP_AMF_NULL:
 	case STU_RTMP_AMF_UNDEFINED:
 
 	case STU_RTMP_AMF_ECMA_ARRAY:
-		n = stu_rtmp_amf_parse_ecma_array(item, p, len - item->cost, err);
-		item->cost += n;
+		n = stu_rtmp_amf_parse_ecma_array(item, p, len - cost, err);
+		cost += n;
 		break;
 
 	case STU_RTMP_AMF_END_OF_OBJECT:
@@ -553,35 +557,36 @@ stu_rtmp_amf_parse_value(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char 
 		break;
 
 	case STU_RTMP_AMF_STRICT_ARRAY:
-		n = stu_rtmp_amf_parse_strict_array(item, p, len - item->cost, err);
-		item->cost += n;
+		n = stu_rtmp_amf_parse_strict_array(item, p, len - cost, err);
+		cost += n;
 		break;
 
 	case STU_RTMP_AMF_DATE:
-		n = stu_rtmp_amf_parse_date(item, p, len - item->cost, err);
-		item->cost += n;
+		n = stu_rtmp_amf_parse_date(item, p, len - cost, err);
+		cost += n;
 		break;
 
 	case STU_RTMP_AMF_LONG_STRING:
-		n = stu_rtmp_amf_parse_long_string(item, p, len - item->cost, err);
-		item->cost += n;
+		n = stu_rtmp_amf_parse_long_string(item, p, len - cost, err);
+		cost += n;
 		break;
 
 	default:
 		stu_log_error(0, "Skipping unsupported AMF value type(%x)", item->type);
-		item->cost = len;
+		cost = len;
 		*err = p;
 		break;
 	}
 
 failed:
 
-	return item->cost;
+	return cost;
 }
 
 static size_t
 stu_rtmp_amf_parse_number(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char **err) {
-	u_char *p;
+	u_char       *p;
+	stu_uint32_t  cost;
 
 	if (len < 8) {
 		stu_log_error(0, "Data not enough while parsing AMF number.");
@@ -589,7 +594,7 @@ stu_rtmp_amf_parse_number(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char
 	}
 
 	p = data;
-	item->cost = 0;
+	cost = 0;
 
 	item->value = (uintptr_t) stu_rtmp_amf_malloc_fn(8);
 	if ((void *) item->value == NULL) {
@@ -597,21 +602,22 @@ stu_rtmp_amf_parse_number(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char
 	}
 
 	*(stu_double_t *) item->value = stu_endian_64(*(stu_uint64_t *) p);
-	item->cost += 8;
+	cost += 8;
 
-	return item->cost;
+	return cost;
 
 failed:
 
 	*err = p;
 
-	return item->cost;
+	return cost;
 }
 
 static size_t
 stu_rtmp_amf_parse_string(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char **err) {
-	u_char    *p;
-	stu_str_t *str;
+	u_char       *p;
+	stu_str_t    *str;
+	stu_uint32_t  cost;
 
 	if (len < 2) {
 		stu_log_error(0, "Data not enough while parsing AMF string.");
@@ -619,7 +625,7 @@ stu_rtmp_amf_parse_string(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char
 	}
 
 	p = data;
-	item->cost = 0;
+	cost = 0;
 
 	item->value = (uintptr_t) stu_rtmp_amf_malloc_fn(sizeof(stu_str_t));
 	if ((void *) item->value == NULL) {
@@ -629,7 +635,7 @@ stu_rtmp_amf_parse_string(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char
 	str = (stu_str_t *) item->value;
 	str->len = stu_endian_16(*(stu_uint16_t *) p);
 	p += 2;
-	item->cost += 2;
+	cost += 2;
 
 	str->data = stu_rtmp_amf_malloc_fn(str->len + 1);
 	if (str->data == NULL) {
@@ -638,15 +644,15 @@ stu_rtmp_amf_parse_string(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char
 
 	stu_strncpy(str->data, p, str->len);
 	p += str->len;
-	item->cost += str->len;
+	cost += str->len;
 
-	return item->cost;
+	return cost;
 
 failed:
 
 	*err = p;
 
-	return item->cost;
+	return cost;
 }
 
 static size_t
@@ -654,6 +660,8 @@ stu_rtmp_amf_parse_object(stu_rtmp_amf_t *object, u_char *data, size_t len, u_ch
 	stu_rtmp_amf_t *item;
 	u_char         *p;
 	size_t          n;
+	stu_uint16_t    m;
+	stu_uint32_t    cost;
 
 	if (len < 3) {
 		stu_log_error(0, "Data not enough while parsing AMF object.");
@@ -661,17 +669,17 @@ stu_rtmp_amf_parse_object(stu_rtmp_amf_t *object, u_char *data, size_t len, u_ch
 	}
 
 	p = data;
-	object->cost = 0;
+	cost = 0;
 
 	for ( ; object->ended == FALSE && object->cost < len; ) {
-		n = stu_endian_16(*(stu_uint16_t *) p);
+		m = stu_endian_16(*(stu_uint16_t *) p);
 		p += 2;
-		object->cost += 2;
+		cost += 2;
 
-		if (n == 0 && *p == STU_RTMP_AMF_END_OF_OBJECT) {
-			p += 1;
-			object->cost += 1;
+		if (m == 0 && *p == STU_RTMP_AMF_END_OF_OBJECT) {
 			object->ended = TRUE;
+			p += 1;
+			cost += 1;
 			break;
 		}
 
@@ -680,28 +688,28 @@ stu_rtmp_amf_parse_object(stu_rtmp_amf_t *object, u_char *data, size_t len, u_ch
 			goto failed;
 		}
 
-		if (stu_rtmp_amf_set_key(item, p, n) != STU_OK) {
+		if (stu_rtmp_amf_set_key(item, p, m) != STU_OK) {
 			stu_rtmp_amf_delete(item);
 			goto failed;
 		}
 
-		p += n;
-		object->cost += n;
+		p += m;
+		cost += m;
 
-		n = stu_rtmp_amf_parse_value(item, p, len - object->cost, err);
+		n = stu_rtmp_amf_parse_value(item, p, len - cost, err);
 		p += n;
-		object->cost += n;
+		cost += n;
 
 		stu_rtmp_amf_add_item_to_object(object, item);
 	}
 
-	return object->cost;
+	return cost;
 
 failed:
 
 	*err = p;
 
-	return object->cost;
+	return cost;
 }
 
 static size_t
@@ -709,7 +717,7 @@ stu_rtmp_amf_parse_ecma_array(stu_rtmp_amf_t *array, u_char *data, size_t len, u
 	stu_rtmp_amf_t *item;
 	u_char         *p;
 	size_t          n;
-	stu_uint32_t    i, m;
+	stu_uint32_t    i, m, cost;
 
 	if (len < 4) {
 		stu_log_error(0, "Data not enough while parsing AMF ECMA array.");
@@ -717,21 +725,21 @@ stu_rtmp_amf_parse_ecma_array(stu_rtmp_amf_t *array, u_char *data, size_t len, u
 	}
 
 	p = data;
-	array->cost = 0;
+	cost = 0;
 
 	m = stu_endian_32(*(stu_uint16_t *) p);
 	p += 4;
-	array->cost += 4;
+	cost += 4;
 
-	for (i = 0; i < m && array->ended == FALSE && array->cost < len; i++) {
+	for (i = 0; i < m && array->ended == FALSE && cost < len; i++) {
 		n = stu_endian_16(*(stu_uint16_t *) p);
 		p += 2;
-		array->cost += 2;
+		cost += 2;
 
 		if (n == 0 && *p == STU_RTMP_AMF_END_OF_OBJECT) {
-			p += 1;
-			array->cost += 1;
 			array->ended = TRUE;
+			p += 1;
+			cost += 1;
 			break;
 		}
 
@@ -746,22 +754,22 @@ stu_rtmp_amf_parse_ecma_array(stu_rtmp_amf_t *array, u_char *data, size_t len, u
 		}
 
 		p += n;
-		array->cost += n;
+		cost += n;
 
-		n = stu_rtmp_amf_parse_value(item, p, len - array->cost, err);
+		n = stu_rtmp_amf_parse_value(item, p, len - cost, err);
 		p += n;
-		array->cost += n;
+		cost += n;
 
 		stu_rtmp_amf_add_item_to_object(array, item);
 	}
 
-	return array->cost;
+	return cost;
 
 failed:
 
 	*err = p;
 
-	return array->cost;
+	return cost;
 }
 
 static size_t
@@ -769,7 +777,7 @@ stu_rtmp_amf_parse_strict_array(stu_rtmp_amf_t *array, u_char *data, size_t len,
 	stu_rtmp_amf_t *item;
 	u_char         *p;
 	size_t          n;
-	stu_uint32_t    i, m;
+	stu_uint32_t    i, m, cost;
 
 	if (len < 4) {
 		stu_log_error(0, "Data not enough while parsing AMF ECMA array.");
@@ -777,17 +785,17 @@ stu_rtmp_amf_parse_strict_array(stu_rtmp_amf_t *array, u_char *data, size_t len,
 	}
 
 	p = data;
-	array->cost = 0;
+	cost = 0;
 
 	m = stu_endian_32(*(stu_uint16_t *) p);
 	p += 4;
-	array->cost += 4;
+	cost += 4;
 
-	for (i = 0; i < m && array->ended == FALSE && array->cost < len; i++) {
+	for (i = 0; i < m && array->ended == FALSE && cost < len; i++) {
 		if (*p == STU_RTMP_AMF_END_OF_OBJECT) {
-			p += 1;
-			array->cost += 1;
 			array->ended = TRUE;
+			p += 1;
+			cost += 1;
 			break;
 		}
 
@@ -796,26 +804,27 @@ stu_rtmp_amf_parse_strict_array(stu_rtmp_amf_t *array, u_char *data, size_t len,
 			goto failed;
 		}
 
-		n = stu_rtmp_amf_parse_value(item, p, len - array->cost, err);
+		n = stu_rtmp_amf_parse_value(item, p, len - cost, err);
 		p += n;
-		array->cost += n;
+		cost += n;
 
 		stu_rtmp_amf_add_item_to_object(array, item);
 	}
 
-	return array->cost;
+	return cost;
 
 failed:
 
 	*err = p;
 
-	return array->cost;
+	return cost;
 }
 
 static size_t
 stu_rtmp_amf_parse_date(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char **err) {
 	u_char       *p;
 	stu_double_t  off;
+	stu_uint32_t  cost;
 
 	if (len < 10) {
 		stu_log_error(0, "Data not enough while parsing AMF date.");
@@ -823,7 +832,7 @@ stu_rtmp_amf_parse_date(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char *
 	}
 
 	p = data;
-	item->cost = 0;
+	cost = 0;
 
 	item->value = (uintptr_t) stu_rtmp_amf_malloc_fn(8);
 	if ((void *) item->value == NULL) {
@@ -832,27 +841,28 @@ stu_rtmp_amf_parse_date(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char *
 
 	item->timestamp = stu_endian_64(*(stu_uint64_t *) p);
 	p += 8;
-	item->cost += 8;
+	cost += 8;
 
 	item->timeoffset = off = stu_endian_16(*(stu_uint16_t *) p);
 	p += 2;
-	item->cost += 2;
+	cost += 2;
 
 	*(stu_double_t *) item->value = item->timestamp + off * 60 * 1000;
 
-	return item->cost;
+	return cost;
 
 failed:
 
 	*err = p;
 
-	return item->cost;
+	return cost;
 }
 
 static size_t
 stu_rtmp_amf_parse_long_string(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char **err) {
-	u_char    *p;
-	stu_str_t *str;
+	u_char       *p;
+	stu_str_t    *str;
+	stu_uint32_t  cost;
 
 	if (len < 2) {
 		stu_log_error(0, "Data not enough while parsing AMF string.");
@@ -860,7 +870,7 @@ stu_rtmp_amf_parse_long_string(stu_rtmp_amf_t *item, u_char *data, size_t len, u
 	}
 
 	p = data;
-	item->cost = 0;
+	cost = 0;
 
 	item->value = (uintptr_t) stu_rtmp_amf_malloc_fn(sizeof(stu_str_t));
 	if ((void *) item->value == NULL) {
@@ -870,7 +880,7 @@ stu_rtmp_amf_parse_long_string(stu_rtmp_amf_t *item, u_char *data, size_t len, u
 	str = (stu_str_t *) item->value;
 	str->len = stu_endian_32(*(stu_uint32_t *) p);
 	p += 4;
-	item->cost += 4;
+	cost += 4;
 
 	str->data = stu_rtmp_amf_malloc_fn(str->len + 1);
 	if (str->data == NULL) {
@@ -879,15 +889,15 @@ stu_rtmp_amf_parse_long_string(stu_rtmp_amf_t *item, u_char *data, size_t len, u
 
 	stu_strncpy(str->data, p, str->len);
 	p += str->len;
-	item->cost += str->len;
+	cost += str->len;
 
-	return item->cost;
+	return cost;
 
 failed:
 
 	*err = p;
 
-	return item->cost;
+	return cost;
 }
 
 

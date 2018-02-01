@@ -35,6 +35,10 @@
 #define STU_RTMP_EVENT_TYPE_PING_REQUEST        0X0006
 #define STU_RTMP_EVENT_TYPE_PING_RESPONSE       0X0007
 
+#define STU_RTMP_BANDWIDTH_LIMIT_TYPE_HARD      0x00
+#define STU_RTMP_BANDWIDTH_LIMIT_TYPE_SOFT      0x01
+#define STU_RTMP_BANDWIDTH_LIMIT_TYPE_DYNAMIC   0x02
+
 #define STU_RTMP_AUDIO_FORMAT_LINEAR_PCM_PLATFORM_ENDIAN    0x00
 #define STU_RTMP_AUDIO_FORMAT_ADPCM                         0x01
 #define STU_RTMP_AUDIO_FORMAT_MP3                           0x02
@@ -58,6 +62,65 @@
 #define STU_RTMP_VIDEO_CODEC_SCREEN_VIDEO_2  0x06
 #define STU_RTMP_VIDEO_CODEC_AVC             0x07
 
+extern stu_str_t  STU_RTMP_CMD_CONNECT;
+extern stu_str_t  STU_RTMP_CMD_CLOSE;
+extern stu_str_t  STU_RTMP_CMD_CREATE_STREAM;
+extern stu_str_t  STU_RTMP_CMD_RESULT;
+extern stu_str_t  STU_RTMP_CMD_ERROR;
+
+extern stu_str_t  STU_RTMP_CMD_PLAY;
+extern stu_str_t  STU_RTMP_CMD_PLAY2;
+extern stu_str_t  STU_RTMP_CMD_DELETE_STREAM;
+extern stu_str_t  STU_RTMP_CMD_CLOSE_STREAM;
+extern stu_str_t  STU_RTMP_CMD_RECEIVE_AUDIO;
+extern stu_str_t  STU_RTMP_CMD_RECEIVE_VIDEO;
+extern stu_str_t  STU_RTMP_CMD_PUBLISH;
+extern stu_str_t  STU_RTMP_CMD_SEEK;
+extern stu_str_t  STU_RTMP_CMD_PAUSE;
+extern stu_str_t  STU_RTMP_CMD_ON_STATUS;
+
+extern stu_str_t  STU_RTMP_LEVEL_ERROR;
+extern stu_str_t  STU_RTMP_LEVEL_STATUS;
+extern stu_str_t  STU_RTMP_LEVEL_WARNING;
+
+extern stu_str_t  STU_RTMP_CODE_NETCONNECTION_CALL_FAILED;
+extern stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_APPSHUTDOWN;
+extern stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_CLOSED;
+extern stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_FAILED;
+extern stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_IDLETIMEOUT;
+extern stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_INVALIDAPP;
+extern stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_REJECTED;
+extern stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_SUCCESS;
+
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_BUFFER_EMPTY;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_BUFFER_FLUSH;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_BUFFER_FULL;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_FAILED;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_PAUSE_NOTIFY;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_PLAY_FAILED;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_PLAY_FILESTRUCTUREINVALID;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_PLAY_PUBLISHNOTIFY;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_PLAY_RESET;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_PLAY_START;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_PLAY_STOP;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_PLAY_STREAMNOTFOUND;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_PLAY_UNPUBLISHNOTIFY;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_PUBLISH_BADNAME;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_PUBLISH_IDLE;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_PUBLISH_START;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_RECORD_ALREADYEXISTS;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_RECORD_FAILED;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_RECORD_NOACCESS;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_RECORD_START;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_RECORD_STOP;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_SEEK_FAILED;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_SEEK_INVALIDTIME;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_SEEK_NOTIFY;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_STEP_NOTIFY;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_UNPAUSE_NOTIFY;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_UNPUBLISH_SUCCESS;
+extern stu_str_t  STU_RTMP_CODE_NETSTREAM_VIDEO_DIMENSIONCHANGE;
+
 typedef struct {
 	stu_uint8_t                type;        // 1 byte
 	stu_uint32_t               payload_len; // 3 bytes
@@ -69,11 +132,25 @@ typedef struct {
 	stu_rtmp_message_header_t  header;
 	stu_buf_t                  payload;
 
-	void                      *data;
-
 	// used for parsing rtmp message.
 	stu_uint8_t                state;
 } stu_rtmp_message_t;
+
+typedef struct {
+	stu_rtmp_message_header_t  header;
+	stu_uint16_t               type;
+	stu_uint32_t               stream_id;
+	stu_uint32_t               buffer_len;
+	stu_uint32_t               timestamp;
+	stu_buf_t                  payload;
+} stu_rtmp_user_control_message_t;
+
+typedef struct {
+	stu_rtmp_message_header_t  header;
+	stu_uint32_t               bandwidth;
+	stu_uint8_t                limit_type;
+	stu_buf_t                  payload;
+} stu_rtmp_bandwidth_message_t;
 
 typedef struct {
 	stu_rtmp_message_header_t  header;
@@ -118,6 +195,20 @@ typedef struct {
 	stu_str_t                  publishing_type;
 	stu_double_t               milliseconds;
 	stu_bool_t                 pause;
+	stu_buf_t                  payload;
 } stu_rtmp_command_message_t;
+
+typedef struct {
+	stu_queue_t                queue;
+	stu_rtmp_message_header_t  header;
+	stu_buf_t                  payload;
+	stu_uint32_t               size;
+} stu_rtmp_aggregate_body_t;
+
+typedef struct {
+	stu_rtmp_message_header_t  header;
+	stu_queue_t                body;
+	stu_buf_t                  payload;
+} stu_rtmp_aggregate_message_t;
 
 #endif /* STUDEASE_CN_RTMP_STU_RTMP_MESSAGE_H_ */

@@ -11,14 +11,14 @@
 #include "kiwistrmd.com/core/ksd_core.h"
 #include "kiwistrmd.com/ksd_config.h"
 
-//extern const stu_str_t  __NAME;
-//extern const stu_str_t  __VERSION;
+extern const stu_str_t  __NAME;
+extern const stu_str_t  __VERSION;
 
-//extern volatile ksd_cycle_t *ksd_cycle;
+extern volatile ksd_cycle_t *ksd_cycle;
 
 
 int main(void) {
-	/*ksd_conf_t *conf;
+	ksd_conf_t *conf;
 
 	// init cycle
 	if (ksd_cycle_init() == STU_ERROR) {
@@ -42,7 +42,7 @@ int main(void) {
 	ksd_process_master_cycle();
 
 	// delete pid
-	ksd_cycle_delete_pidfile(&conf->pid);*/
+	ksd_cycle_delete_pidfile(&conf->pid);
 
 	return EXIT_SUCCESS;
 }
