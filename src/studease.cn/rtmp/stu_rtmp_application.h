@@ -61,7 +61,8 @@ stu_int32_t  stu_rtmp_application_init_hash();
 stu_int32_t  stu_rtmp_accept(stu_rtmp_netconnection_t *nc);
 stu_int32_t  stu_rtmp_reject(stu_rtmp_netconnection_t *nc);
 
-stu_int32_t  stu_rtmp_application_on_connect(stu_rtmp_request_t *r);
+stu_int32_t  stu_rtmp_application_on_start(stu_rtmp_application_t *app);
+stu_int32_t  stu_rtmp_application_on_stop(stu_rtmp_application_t *app);
 
 stu_int32_t  stu_rtmp_application_insert(stu_rtmp_netconnection_t *nc);
 stu_int32_t  stu_rtmp_application_insert_locked(stu_rtmp_netconnection_t *nc);

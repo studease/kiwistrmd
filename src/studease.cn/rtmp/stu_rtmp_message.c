@@ -24,6 +24,12 @@ stu_str_t  STU_RTMP_CMD_SEEK          = stu_string("seek");
 stu_str_t  STU_RTMP_CMD_PAUSE         = stu_string("pause");
 stu_str_t  STU_RTMP_CMD_ON_STATUS     = stu_string("onStatus");
 
+stu_str_t  STU_RTMP_SET_BUFFER_LENGTH = stu_string("setBufferLength");
+stu_str_t  STU_RTMP_SET_DATA_FRAME    = stu_string("@setDataFrame");
+stu_str_t  STU_RTMP_CLEAR_DATA_FRAME  = stu_string("@clearDataFrame");
+stu_str_t  STU_RTMP_AUDIO_FRAME       = stu_string("audioFrame");
+stu_str_t  STU_RTMP_VIDEO_FRAME       = stu_string("videoFrame");
+
 stu_str_t  STU_RTMP_LEVEL_ERROR   = stu_string("error");
 stu_str_t  STU_RTMP_LEVEL_STATUS  = stu_string("status");
 stu_str_t  STU_RTMP_LEVEL_WARNING = stu_string("warning");

@@ -55,8 +55,8 @@ struct stu_rtmp_instance_s {
 stu_int32_t  stu_instance_insert(stu_hash_t *hash, stu_rtmp_netconnection_t *nc);
 stu_int32_t  stu_instance_insert_locked(stu_hash_t *hash, stu_rtmp_netconnection_t *nc);
 
-void         stu_instance_remove(stu_rtmp_netconnection_t *nc);
-void         stu_instance_remove_locked(stu_rtmp_netconnection_t *nc);
+void         stu_instance_remove(stu_hash_t *hash, stu_rtmp_netconnection_t *nc);
+void         stu_instance_remove_locked(stu_hash_t *hash, stu_rtmp_netconnection_t *nc);
 
 void         stu_instance_broadcast(stu_rtmp_instance_t *inst, u_char *data, size_t len, off_t off);
 

@@ -67,6 +67,7 @@ stu_rtmp_amf_t *stu_rtmp_amf_create_ecma_array(stu_str_t *key);
 stu_rtmp_amf_t *stu_rtmp_amf_create_strict_array(stu_str_t *key);
 stu_rtmp_amf_t *stu_rtmp_amf_create_date(stu_str_t *key, stu_double_t ts, stu_uint16_t off);
 
+stu_int32_t     stu_rtmp_amf_set_key(stu_rtmp_amf_t *item, u_char *data, size_t len);
 stu_rtmp_amf_t *stu_rtmp_amf_duplicate(stu_rtmp_amf_t *item, stu_bool_t recurse);
 
 void            stu_rtmp_amf_add_item_to_array(stu_rtmp_amf_t *array, stu_rtmp_amf_t *item);
@@ -84,6 +85,6 @@ void            stu_rtmp_amf_delete_item_from_array(stu_rtmp_amf_t *array, stu_i
 void            stu_rtmp_amf_delete_item_from_object(stu_rtmp_amf_t *object, stu_str_t *key);
 
 stu_rtmp_amf_t *stu_rtmp_amf_parse(u_char *data, size_t len);
-u_char         *stu_rtmp_amf_stringify(stu_rtmp_amf_t *item, u_char *dst);
+u_char         *stu_rtmp_amf_stringify(u_char *dst, stu_rtmp_amf_t *item);
 
 #endif /* STUDEASE_CN_RTMP_STU_RTMP_AMF_H_ */

@@ -25,6 +25,7 @@ typedef struct {
 
 struct stu_rtmp_request_s {
 	stu_rtmp_netconnection_t   nc;
+	stu_rtmp_netstream_t       ns;
 
 	stu_rtmp_event_handler_pt  read_event_handler;
 	stu_rtmp_event_handler_pt  write_event_handler;

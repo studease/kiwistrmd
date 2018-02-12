@@ -7,6 +7,8 @@
 
 #include "stu_rtmp.h"
 
+stu_str_t  stu_rtmp_definst = stu_string("_definst_");
+
 
 stu_int32_t
 stu_instance_insert(stu_hash_t *hash, stu_rtmp_netconnection_t *nc) {
@@ -54,15 +56,25 @@ stu_instance_insert_locked(stu_hash_t *hash, stu_rtmp_netconnection_t *nc) {
 
 	nc->instance = inst;
 
-	return stu_hash_insert(&inst->connections, &nc->inst_name, inst);
+	return stu_hash_insert(&inst->connections, &nc->far_id, nc);
 }
 
 void
-stu_instance_remove(stu_rtmp_netconnection_t *nc) {
-
+stu_instance_remove(stu_hash_t *hash, stu_rtmp_netconnection_t *nc) {
+	stu_mutex_lock(&hash->lock);
+	stu_instance_insert_locked(hash, nc);
+	stu_mutex_unlock(&hash->lock);
 }
 
 void
-stu_instance_remove_locked(stu_rtmp_netconnection_t *nc) {
+stu_instance_remove_locked(stu_hash_t *hash, stu_rtmp_netconnection_t *nc) {
+	stu_rtmp_instance_t *inst;
+	stu_uint32_t         hk;
 
+	hk = stu_hash_key(nc->inst_name.data, nc->inst_name.len, hash->flags);
+
+	inst = stu_hash_find_locked(hash, hk, nc->inst_name.data, nc->inst_name.len);
+	if (inst) {
+		stu_hash_remove(&inst->connections, hk, nc->far_id.data, nc->far_id.len);
+	}
 }

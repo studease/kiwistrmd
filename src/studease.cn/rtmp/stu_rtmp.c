@@ -11,6 +11,9 @@
 
 stu_str_t            stu_rtmp_root = stu_string("applications");
 
+stu_rtmp_amf_t      *stu_rtmp_properties;
+stu_rtmp_amf_t      *stu_rtmp_version;
+
 extern stu_thread_t  stu_threads[STU_THREAD_MAXIMUM];
 extern stu_int32_t   stu_thread_n;
 
@@ -23,11 +26,41 @@ static void  stu_rtmp_handler(stu_event_t *ev);
 
 stu_int32_t
 stu_rtmp_init() {
+	stu_rtmp_amf_t *item;
+	stu_str_t       key, val;
+
+	// FMS properties
+	stu_rtmp_properties = stu_rtmp_amf_create_object(NULL);
+	stu_rtmp_properties->ended = TRUE;
+
+	stu_str_set(&key, "fmsVer");
+	stu_str_set(&val, "FMS/5,0,3,3029");
+	item = stu_rtmp_amf_create_string(&key, val.data, val.len);
+	stu_rtmp_amf_add_item_to_object(stu_rtmp_properties, item);
+
+	stu_str_set(&key, "capabilities");
+	item = stu_rtmp_amf_create_number(&key, 255);
+	stu_rtmp_amf_add_item_to_object(stu_rtmp_properties, item);
+
+	stu_str_set(&key, "mode");
+	item = stu_rtmp_amf_create_number(&key, 1);
+	stu_rtmp_amf_add_item_to_object(stu_rtmp_properties, item);
+
+	// FMS version
+	stu_rtmp_version = stu_rtmp_amf_create_ecma_array(NULL);
+
+	stu_str_set(&key, "version");
+	stu_str_set(&val, "FMS/5,0,3,3029");
+	item = stu_rtmp_amf_create_string(&key, val.data, val.len);
+	stu_rtmp_amf_add_item_to_object(stu_rtmp_version, item);
+
+	// filter
 	if (stu_rtmp_filter_init_hash() == STU_ERROR) {
 		stu_log_error(0, "Failed to init rtmp filter hash.");
 		return STU_ERROR;
 	}
 
+	// phase
 	if (stu_rtmp_phase_init() == STU_ERROR) {
 		stu_log_error(0, "Failed to init rtmp phase.");
 		return STU_ERROR;

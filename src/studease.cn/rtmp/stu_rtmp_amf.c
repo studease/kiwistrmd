@@ -10,8 +10,6 @@
 static void *(*stu_rtmp_amf_malloc_fn)(size_t size) = stu_calloc;
 static void  (*stu_rtmp_amf_free_fn)(void *ptr) = stu_free;
 
-static stu_int32_t  stu_rtmp_amf_set_key(stu_rtmp_amf_t *item, u_char *data, size_t len);
-
 static size_t  stu_rtmp_amf_parse_value(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char **err);
 static size_t  stu_rtmp_amf_parse_number(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char **err);
 static size_t  stu_rtmp_amf_parse_string(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char **err);
@@ -21,19 +19,19 @@ static size_t  stu_rtmp_amf_parse_strict_array(stu_rtmp_amf_t *array, u_char *da
 static size_t  stu_rtmp_amf_parse_date(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char **err);
 static size_t  stu_rtmp_amf_parse_long_string(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char **err);
 
-static u_char *stu_rtmp_amf_print_value(stu_rtmp_amf_t *item, u_char *dst);
-static u_char *stu_rtmp_amf_print_number(stu_rtmp_amf_t *item, u_char *dst);
-static u_char *stu_rtmp_amf_print_bool(stu_rtmp_amf_t *item, u_char *dst);
-static u_char *stu_rtmp_amf_print_string(stu_rtmp_amf_t *item, u_char *dst);
-static u_char *stu_rtmp_amf_print_object(stu_rtmp_amf_t *object, u_char *dst);
-static u_char *stu_rtmp_amf_print_null(stu_rtmp_amf_t *item, u_char *dst);
-static u_char *stu_rtmp_amf_print_undefined(stu_rtmp_amf_t *item, u_char *dst);
-static u_char *stu_rtmp_amf_print_ecma_array(stu_rtmp_amf_t *array, u_char *dst);
-static u_char *stu_rtmp_amf_print_strict_array(stu_rtmp_amf_t *array, u_char *dst);
-static u_char *stu_rtmp_amf_print_date(stu_rtmp_amf_t *array, u_char *dst);
-static u_char *stu_rtmp_amf_print_long_string(stu_rtmp_amf_t *item, u_char *dst);
+static u_char *stu_rtmp_amf_print_value(u_char *dst, stu_rtmp_amf_t *item);
+static u_char *stu_rtmp_amf_print_number(u_char *dst, stu_rtmp_amf_t *item);
+static u_char *stu_rtmp_amf_print_bool(u_char *dst, stu_rtmp_amf_t *item);
+static u_char *stu_rtmp_amf_print_string(u_char *dst, stu_rtmp_amf_t *item);
+static u_char *stu_rtmp_amf_print_object(u_char *dst, stu_rtmp_amf_t *object);
+static u_char *stu_rtmp_amf_print_null(u_char *dst, stu_rtmp_amf_t *item);
+static u_char *stu_rtmp_amf_print_undefined(u_char *dst, stu_rtmp_amf_t *item);
+static u_char *stu_rtmp_amf_print_ecma_array(u_char *dst, stu_rtmp_amf_t *array);
+static u_char *stu_rtmp_amf_print_strict_array(u_char *dst, stu_rtmp_amf_t *array);
+static u_char *stu_rtmp_amf_print_date(u_char *dst, stu_rtmp_amf_t *item);
+static u_char *stu_rtmp_amf_print_long_string(u_char *dst, stu_rtmp_amf_t *item);
 
-static u_char *stu_rtmp_amf_print_key(stu_rtmp_amf_t *item, u_char *dst);
+static u_char *stu_rtmp_amf_print_key(u_char *dst, stu_rtmp_amf_t *item);
 
 
 void
@@ -46,6 +44,7 @@ stu_rtmp_amf_init_hooks(stu_rtmp_amf_hooks_t *hooks) {
 		stu_rtmp_amf_free_fn = hooks->free_fn;
 	}
 }
+
 
 stu_rtmp_amf_t *
 stu_rtmp_amf_create(stu_uint8_t type, stu_str_t *key) {
@@ -235,6 +234,27 @@ stu_rtmp_amf_create_date(stu_str_t *key, stu_double_t ts, stu_uint16_t off) {
 }
 
 
+stu_int32_t
+stu_rtmp_amf_set_key(stu_rtmp_amf_t *item, u_char *data, size_t len) {
+	if (data != NULL) {
+		if (item->key.len < len) {
+			if (item->key.data != NULL) {
+				stu_rtmp_amf_free_fn(item->key.data);
+			}
+
+			item->key.data = (u_char *) stu_rtmp_amf_malloc_fn(len + 1);
+			if (item->key.data == NULL) {
+				return STU_ERROR;
+			}
+		}
+
+		stu_strncpy(item->key.data, data, len);
+		item->key.len = len;
+	}
+
+	return STU_OK;
+}
+
 stu_rtmp_amf_t *
 stu_rtmp_amf_duplicate(stu_rtmp_amf_t *item, stu_bool_t recurse) {
 	stu_rtmp_amf_t *copy, *child, *newchild;
@@ -295,27 +315,6 @@ failed:
 	stu_rtmp_amf_delete(copy);
 
 	return NULL;
-}
-
-static stu_int32_t
-stu_rtmp_amf_set_key(stu_rtmp_amf_t *item, u_char *data, size_t len) {
-	if (data != NULL) {
-		if (item->key.len < len) {
-			if (item->key.data != NULL) {
-				stu_rtmp_amf_free_fn(item->key.data);
-			}
-
-			item->key.data = (u_char *) stu_rtmp_amf_malloc_fn(len + 1);
-			if (item->key.data == NULL) {
-				return STU_ERROR;
-			}
-		}
-
-		stu_strncpy(item->key.data, data, len);
-		item->key.len = len;
-	}
-
-	return STU_OK;
 }
 
 
@@ -546,6 +545,7 @@ stu_rtmp_amf_parse_value(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char 
 
 	case STU_RTMP_AMF_NULL:
 	case STU_RTMP_AMF_UNDEFINED:
+		break;
 
 	case STU_RTMP_AMF_ECMA_ARRAY:
 		n = stu_rtmp_amf_parse_ecma_array(item, p, len - cost, err);
@@ -601,7 +601,7 @@ stu_rtmp_amf_parse_number(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char
 		goto failed;
 	}
 
-	*(stu_double_t *) item->value = stu_endian_64(*(stu_uint64_t *) p);
+	*(stu_uint64_t *) item->value = stu_endian_64(*(stu_uint64_t *) p);
 	cost += 8;
 
 	return cost;
@@ -902,49 +902,49 @@ failed:
 
 
 u_char *
-stu_rtmp_amf_stringify(stu_rtmp_amf_t *item, u_char *dst) {
-	return stu_rtmp_amf_print_value(item, dst);
+stu_rtmp_amf_stringify(u_char *dst, stu_rtmp_amf_t *item) {
+	return stu_rtmp_amf_print_value(dst, item);
 }
 
 static u_char *
-stu_rtmp_amf_print_value(stu_rtmp_amf_t *item, u_char *dst) {
+stu_rtmp_amf_print_value(u_char *dst, stu_rtmp_amf_t *item) {
 	u_char *p;
 
 	switch (item->type) {
 	case STU_RTMP_AMF_DOUBLE:
-		p = stu_rtmp_amf_print_number(item, dst);
+		p = stu_rtmp_amf_print_number(dst, item);
 		break;
 
 	case STU_RTMP_AMF_BOOLEAN:
-		p = stu_rtmp_amf_print_bool(item, dst);
+		p = stu_rtmp_amf_print_bool(dst, item);
 		break;
 
 	case STU_RTMP_AMF_STRING:
-		p = stu_rtmp_amf_print_string(item, dst);
+		p = stu_rtmp_amf_print_string(dst, item);
 		break;
 
 	case STU_RTMP_AMF_OBJECT:
-		p = stu_rtmp_amf_print_object(item, dst);
+		p = stu_rtmp_amf_print_object(dst, item);
 		break;
 
 	case STU_RTMP_AMF_NULL:
-		p = stu_rtmp_amf_print_null(item, dst);
+		p = stu_rtmp_amf_print_null(dst, item);
 		break;
 
 	case STU_RTMP_AMF_UNDEFINED:
-		p = stu_rtmp_amf_print_undefined(item, dst);
+		p = stu_rtmp_amf_print_undefined(dst, item);
 		break;
 
 	case STU_RTMP_AMF_ECMA_ARRAY:
-		p = stu_rtmp_amf_print_ecma_array(item, dst);
+		p = stu_rtmp_amf_print_ecma_array(dst, item);
 		break;
 
 	case STU_RTMP_AMF_STRICT_ARRAY:
-		p = stu_rtmp_amf_print_strict_array(item, dst);
+		p = stu_rtmp_amf_print_strict_array(dst, item);
 		break;
 
 	case STU_RTMP_AMF_DATE:
-		p = stu_rtmp_amf_print_date(item, dst);
+		p = stu_rtmp_amf_print_date(dst, item);
 		break;
 
 	default:
@@ -955,24 +955,22 @@ stu_rtmp_amf_print_value(stu_rtmp_amf_t *item, u_char *dst) {
 }
 
 static u_char *
-stu_rtmp_amf_print_number(stu_rtmp_amf_t *item, u_char *dst) {
+stu_rtmp_amf_print_number(u_char *dst, stu_rtmp_amf_t *item) {
 	u_char       *p;
-	stu_double_t *d;
 	stu_uint64_t  n;
 
 	p = dst;
-	d = (stu_double_t *) item->value;
 
 	*p++ = STU_RTMP_AMF_DOUBLE;
 
-	n = stu_endian_64(*(stu_uint64_t *) d);
+	n = stu_endian_64(*(stu_uint64_t *) item->value);
 	p = stu_memcpy(p, &n, 8);
 
 	return p;
 }
 
 static u_char *
-stu_rtmp_amf_print_bool(stu_rtmp_amf_t *item, u_char *dst) {
+stu_rtmp_amf_print_bool(u_char *dst, stu_rtmp_amf_t *item) {
 	u_char *p;
 
 	p = dst;
@@ -984,7 +982,7 @@ stu_rtmp_amf_print_bool(stu_rtmp_amf_t *item, u_char *dst) {
 }
 
 static u_char *
-stu_rtmp_amf_print_string(stu_rtmp_amf_t *item, u_char *dst) {
+stu_rtmp_amf_print_string(u_char *dst, stu_rtmp_amf_t *item) {
 	u_char       *p;
 	stu_str_t    *str;
 	stu_uint16_t  n;
@@ -993,7 +991,7 @@ stu_rtmp_amf_print_string(stu_rtmp_amf_t *item, u_char *dst) {
 	str = (stu_str_t *) item->value;
 
 	if (str->len >= 0xFFFF) {
-		return stu_rtmp_amf_print_long_string(item, dst);
+		return stu_rtmp_amf_print_long_string(dst, item);
 	}
 
 	*p++ = STU_RTMP_AMF_STRING;
@@ -1007,7 +1005,7 @@ stu_rtmp_amf_print_string(stu_rtmp_amf_t *item, u_char *dst) {
 }
 
 static u_char *
-stu_rtmp_amf_print_object(stu_rtmp_amf_t *object, u_char *dst) {
+stu_rtmp_amf_print_object(u_char *dst, stu_rtmp_amf_t *object) {
 	u_char         *p;
 	stu_rtmp_amf_t *item;
 	stu_uint16_t    n;
@@ -1018,8 +1016,8 @@ stu_rtmp_amf_print_object(stu_rtmp_amf_t *object, u_char *dst) {
 	*p++ = STU_RTMP_AMF_OBJECT;
 
 	for (item = (stu_rtmp_amf_t *) object->value; item; item = item->next) {
-		p = stu_rtmp_amf_print_key(item, p);
-		p = stu_rtmp_amf_print_value(item, p);
+		p = stu_rtmp_amf_print_key(p, item);
+		p = stu_rtmp_amf_print_value(p, item);
 	}
 
 	p = stu_memcpy(p, &n, 2);
@@ -1029,7 +1027,7 @@ stu_rtmp_amf_print_object(stu_rtmp_amf_t *object, u_char *dst) {
 }
 
 static u_char *
-stu_rtmp_amf_print_null(stu_rtmp_amf_t *item, u_char *dst) {
+stu_rtmp_amf_print_null(u_char *dst, stu_rtmp_amf_t *item) {
 	u_char *p;
 
 	p = dst;
@@ -1040,7 +1038,7 @@ stu_rtmp_amf_print_null(stu_rtmp_amf_t *item, u_char *dst) {
 }
 
 static u_char *
-stu_rtmp_amf_print_undefined(stu_rtmp_amf_t *item, u_char *dst) {
+stu_rtmp_amf_print_undefined(u_char *dst, stu_rtmp_amf_t *item) {
 	u_char *p;
 
 	p = dst;
@@ -1051,58 +1049,61 @@ stu_rtmp_amf_print_undefined(stu_rtmp_amf_t *item, u_char *dst) {
 }
 
 static u_char *
-stu_rtmp_amf_print_ecma_array(stu_rtmp_amf_t *array, u_char *dst) {
+stu_rtmp_amf_print_ecma_array(u_char *dst, stu_rtmp_amf_t *array) {
 	u_char         *p;
 	stu_rtmp_amf_t *item;
-	stu_uint32_t   *n, i;
+	stu_uint32_t   *len, i;
+	stu_uint16_t    n;
 
 	p = dst;
+	n = 0;
 
 	*p++ = STU_RTMP_AMF_ECMA_ARRAY;
 
-	n = (stu_uint32_t *) p;
+	len = (stu_uint32_t *) p;
+	p += 4;
 
 	for (item = (stu_rtmp_amf_t *) array->value, i = 0; item; item = item->next, i++) {
-		p = stu_rtmp_amf_print_key(item, p);
-		p = stu_rtmp_amf_print_value(item, p);
+		p = stu_rtmp_amf_print_key(p, item);
+		p = stu_rtmp_amf_print_value(p, item);
 	}
 
-	if (i == 0) {
-		return dst;
-	}
+	*len = stu_endian_32(i);
 
-	*n = stu_endian_32(i);
+	p = stu_memcpy(p, &n, 2);
+	*p++ = STU_RTMP_AMF_END_OF_OBJECT;
 
 	return p;
 }
 
 static u_char *
-stu_rtmp_amf_print_strict_array(stu_rtmp_amf_t *array, u_char *dst) {
+stu_rtmp_amf_print_strict_array(u_char *dst, stu_rtmp_amf_t *array) {
 	u_char         *p;
 	stu_rtmp_amf_t *item;
-	stu_uint32_t   *n, i;
+	stu_uint32_t   *len, i;
+	stu_uint16_t    n;
 
 	p = dst;
+	n = 0;
 
 	*p++ = STU_RTMP_AMF_ECMA_ARRAY;
 
-	n = (stu_uint32_t *) p;
+	len = (stu_uint32_t *) p;
 
 	for (item = (stu_rtmp_amf_t *) array->value, i = 0; item; item = item->next, i++) {
-		p = stu_rtmp_amf_print_value(item, p);
+		p = stu_rtmp_amf_print_value(p, item);
 	}
 
-	if (i == 0) {
-		return dst;
-	}
+	*len = stu_endian_32(i);
 
-	*n = stu_endian_32(i);
+	p = stu_memcpy(p, &n, 2);
+	*p++ = STU_RTMP_AMF_END_OF_OBJECT;
 
 	return p;
 }
 
 static u_char *
-stu_rtmp_amf_print_date(stu_rtmp_amf_t *item, u_char *dst) {
+stu_rtmp_amf_print_date(u_char *dst, stu_rtmp_amf_t *item) {
 	u_char       *p;
 	stu_uint64_t  n;
 	stu_uint16_t  m;
@@ -1121,7 +1122,7 @@ stu_rtmp_amf_print_date(stu_rtmp_amf_t *item, u_char *dst) {
 }
 
 static u_char *
-stu_rtmp_amf_print_long_string(stu_rtmp_amf_t *item, u_char *dst) {
+stu_rtmp_amf_print_long_string(u_char *dst, stu_rtmp_amf_t *item) {
 	u_char       *p;
 	stu_str_t    *str;
 	stu_uint32_t  n;
@@ -1141,7 +1142,7 @@ stu_rtmp_amf_print_long_string(stu_rtmp_amf_t *item, u_char *dst) {
 
 
 static u_char *
-stu_rtmp_amf_print_key(stu_rtmp_amf_t *item, u_char *dst) {
+stu_rtmp_amf_print_key(u_char *dst, stu_rtmp_amf_t *item) {
 	u_char       *p;
 	stu_uint16_t  n;
 

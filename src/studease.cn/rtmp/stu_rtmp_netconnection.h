@@ -82,7 +82,18 @@ typedef struct {
 	stu_rtmp_nc_stat_t      stat;
 } stu_rtmp_netconnection_t;
 
-stu_int32_t  stu_rtmp_send_amf(stu_rtmp_netconnection_t *nc, stu_rtmp_amf_t *v);
+stu_int32_t  stu_rtmp_connect();
+stu_int32_t  stu_rtmp_create_stream();
+stu_int32_t  stu_rtmp_call();
+
+stu_int32_t  stu_rtmp_on_connect(stu_rtmp_netconnection_t *nc);
+stu_int32_t  stu_rtmp_on_close(stu_rtmp_netconnection_t *nc);
+stu_int32_t  stu_rtmp_on_create_stream(stu_rtmp_netconnection_t *nc);
+stu_int32_t  stu_rtmp_on_result(stu_rtmp_netconnection_t *nc);
+stu_int32_t  stu_rtmp_on_error(stu_rtmp_netconnection_t *nc);
+
+stu_int32_t  stu_rtmp_send_buffer(stu_rtmp_netconnection_t *nc, u_char *data, size_t len);
+
 stu_int32_t  stu_rtmp_set_chunk_size(stu_rtmp_netconnection_t *nc, stu_int32_t size);
 stu_int32_t  stu_rtmp_send_abort(stu_rtmp_netconnection_t *nc);
 stu_int32_t  stu_rtmp_send_ack_sequence(stu_rtmp_netconnection_t *nc);
@@ -90,6 +101,6 @@ stu_int32_t  stu_rtmp_send_user_control(stu_rtmp_netconnection_t *nc, stu_uint16
 stu_int32_t  stu_rtmp_set_ack_window_size(stu_rtmp_netconnection_t *nc, stu_uint32_t size);
 stu_int32_t  stu_rtmp_set_peer_bandwidth(stu_rtmp_netconnection_t *nc, stu_uint32_t bandwidth, stu_uint8_t limit_type);
 
-stu_rtmp_amf_t *stu_rtmp_get_information(stu_str_t *level, stu_str_t *code, u_char *description);
+stu_rtmp_amf_t *stu_rtmp_get_information(stu_str_t *level, stu_str_t *code, const char *description);
 
 #endif /* STUDEASE_CN_RTMP_STU_RTMP_NETCONNECTION_H_ */

@@ -28,33 +28,29 @@ stu_rtmp_accept(stu_rtmp_netconnection_t *nc) {
 		return STU_ERROR;
 	}
 
-	// TODO
+	stu_rtmp_set_ack_window_size(nc, 2500000);
+	stu_rtmp_set_peer_bandwidth(nc, 2500000, STU_RTMP_BANDWIDTH_LIMIT_TYPE_DYNAMIC);
+	//stu_rtmp_send_user_control(nc, STU_RTMP_EVENT_TYPE_STREAM_BEGIN, 0, 0, 0);
+	stu_rtmp_set_chunk_size(nc, STU_RTMP_CHUNK_DEFAULT_SIZE);
 
 	return STU_OK;
 }
 
 stu_int32_t
 stu_rtmp_reject(stu_rtmp_netconnection_t *nc) {
-	stu_rtmp_close_connection(nc->connection);
+	return STU_ERROR;
+}
+
+
+stu_int32_t
+stu_rtmp_application_on_start(stu_rtmp_application_t *app) {
 	return STU_OK;
 }
 
 stu_int32_t
-stu_rtmp_application_on_connect(stu_rtmp_request_t *r) {
-	stu_rtmp_amf_t *info;
-	stu_int32_t     rc;
-
-	info = stu_rtmp_get_information();
-	if (stu_strncasecmp(r->nc.read_access.data, "/", 1) == 0 ||
-			stu_strncasecmp(r->nc.read_access.data + 1, r->nc.app_name.data, r->nc.app_name.len) == 0) {
-		rc = stu_rtmp_accept(&r->nc);
-	} else {
-		rc = stu_rtmp_reject(&r->nc);
-	}
-
-	return rc;
+stu_rtmp_application_on_stop(stu_rtmp_application_t *app) {
+	return STU_OK;
 }
-
 
 
 stu_int32_t
@@ -107,10 +103,20 @@ stu_rtmp_application_insert_locked(stu_rtmp_netconnection_t *nc) {
 
 void
 stu_rtmp_application_remove(stu_rtmp_netconnection_t *nc) {
-
+	stu_mutex_lock(&stu_rtmp_applications.lock);
+	stu_rtmp_application_remove_locked(nc);
+	stu_mutex_unlock(&stu_rtmp_applications.lock);
 }
 
 void
 stu_rtmp_application_remove_locked(stu_rtmp_netconnection_t *nc) {
+	stu_rtmp_application_t *app;
+	stu_uint32_t            hk;
 
+	hk = stu_hash_key(nc->app_name.data, nc->app_name.len, stu_rtmp_applications.flags);
+
+	app = stu_hash_find_locked(&stu_rtmp_applications, hk, nc->app_name.data, nc->app_name.len);
+	if (app) {
+		stu_instance_remove(&app->instances, nc);
+	}
 }

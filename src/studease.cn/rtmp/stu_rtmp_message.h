@@ -79,6 +79,12 @@ extern stu_str_t  STU_RTMP_CMD_SEEK;
 extern stu_str_t  STU_RTMP_CMD_PAUSE;
 extern stu_str_t  STU_RTMP_CMD_ON_STATUS;
 
+extern stu_str_t  STU_RTMP_SET_BUFFER_LENGTH;
+extern stu_str_t  STU_RTMP_SET_DATA_FRAME;
+extern stu_str_t  STU_RTMP_CLEAR_DATA_FRAME;
+extern stu_str_t  STU_RTMP_AUDIO_FRAME;
+extern stu_str_t  STU_RTMP_VIDEO_FRAME;
+
 extern stu_str_t  STU_RTMP_LEVEL_ERROR;
 extern stu_str_t  STU_RTMP_LEVEL_STATUS;
 extern stu_str_t  STU_RTMP_LEVEL_WARNING;
@@ -181,7 +187,7 @@ typedef struct {
 typedef struct {
 	stu_rtmp_message_header_t  header;
 	stu_str_t                  name;
-	stu_uint64_t               transaction_id;
+	stu_double_t               transaction_id;
 	stu_rtmp_amf_t            *command_obj;
 	stu_rtmp_amf_t            *arguments;
 	stu_rtmp_amf_t            *response;
