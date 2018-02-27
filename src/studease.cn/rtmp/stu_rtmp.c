@@ -54,6 +54,12 @@ stu_rtmp_init() {
 	item = stu_rtmp_amf_create_string(&key, val.data, val.len);
 	stu_rtmp_amf_add_item_to_object(stu_rtmp_version, item);
 
+	// message
+	if (stu_rtmp_message_init() == STU_ERROR) {
+		stu_log_error(0, "Failed to init rtmp message hash.");
+		return STU_ERROR;
+	}
+
 	// filter
 	if (stu_rtmp_filter_init_hash() == STU_ERROR) {
 		stu_log_error(0, "Failed to init rtmp filter hash.");

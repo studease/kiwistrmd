@@ -23,6 +23,7 @@ stu_int32_t  stu_rtmp_on_delete_stream(stu_rtmp_netstream_t *ns);
 stu_int32_t  stu_rtmp_on_close_stream(stu_rtmp_netstream_t *ns);
 stu_int32_t  stu_rtmp_on_receive_audio(stu_rtmp_netstream_t *ns);
 stu_int32_t  stu_rtmp_on_receive_video(stu_rtmp_netstream_t *ns);
+stu_int32_t  stu_rtmp_on_fcpublish(stu_rtmp_netstream_t *ns);
 stu_int32_t  stu_rtmp_on_publish(stu_rtmp_netstream_t *ns);
 stu_int32_t  stu_rtmp_on_seek(stu_rtmp_netstream_t *ns);
 stu_int32_t  stu_rtmp_on_pause(stu_rtmp_netstream_t *ns);

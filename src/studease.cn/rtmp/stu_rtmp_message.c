@@ -24,11 +24,15 @@ stu_str_t  STU_RTMP_CMD_SEEK          = stu_string("seek");
 stu_str_t  STU_RTMP_CMD_PAUSE         = stu_string("pause");
 stu_str_t  STU_RTMP_CMD_ON_STATUS     = stu_string("onStatus");
 
+// outdated command
+stu_str_t  STU_RTMP_CMD_RELEASE_STREAM = stu_string("releaseStream");
+stu_str_t  STU_RTMP_CMD_FC_PUBLISH     = stu_string("FCPublish");
+stu_str_t  STU_RTMP_CMD_ON_FC_PUBLISH  = stu_string("onFCPublish");
+
 stu_str_t  STU_RTMP_SET_BUFFER_LENGTH = stu_string("setBufferLength");
 stu_str_t  STU_RTMP_SET_DATA_FRAME    = stu_string("@setDataFrame");
 stu_str_t  STU_RTMP_CLEAR_DATA_FRAME  = stu_string("@clearDataFrame");
-stu_str_t  STU_RTMP_AUDIO_FRAME       = stu_string("audioFrame");
-stu_str_t  STU_RTMP_VIDEO_FRAME       = stu_string("videoFrame");
+stu_str_t  STU_RTMP_ON_META_DATA      = stu_string("onMetaData");
 
 stu_str_t  STU_RTMP_LEVEL_ERROR   = stu_string("error");
 stu_str_t  STU_RTMP_LEVEL_STATUS  = stu_string("status");
@@ -71,3 +75,25 @@ stu_str_t  STU_RTMP_CODE_NETSTREAM_STEP_NOTIFY               = stu_string("NetSt
 stu_str_t  STU_RTMP_CODE_NETSTREAM_UNPAUSE_NOTIFY            = stu_string("NetStream.Unpause.Notify");
 stu_str_t  STU_RTMP_CODE_NETSTREAM_UNPUBLISH_SUCCESS         = stu_string("NetStream.Unpublish.Success");
 stu_str_t  STU_RTMP_CODE_NETSTREAM_VIDEO_DIMENSIONCHANGE     = stu_string("NetStream.Video.DimensionChange");
+
+stu_hash_t             stu_rtmp_command_hash;
+
+extern stu_rtmp_command_t  rtmp_command[];
+
+
+stu_int32_t
+stu_rtmp_message_init() {
+	stu_rtmp_command_t *command;
+
+	if (stu_hash_init(&stu_rtmp_command_hash, STU_RTMP_COMMAND_MAX_RECORDS, NULL, STU_HASH_FLAGS_LOWCASE|STU_HASH_FLAGS_REPLACE) == STU_ERROR) {
+		return STU_ERROR;
+	}
+
+	for (command = rtmp_command; command->name.len; command++) {
+		if (stu_hash_insert(&stu_rtmp_command_hash, &command->name, command) == STU_ERROR) {
+			return STU_ERROR;
+		}
+	}
+
+	return STU_OK;
+}

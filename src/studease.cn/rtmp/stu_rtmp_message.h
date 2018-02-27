@@ -10,6 +10,8 @@
 
 #include "stu_rtmp.h"
 
+#define STU_RTMP_COMMAND_MAX_RECORDS          32
+
 #define STU_RTMP_MSG_TYPE_SET_CHUNK_SIZE      0x01
 #define STU_RTMP_MSG_TYPE_ABORT               0x02
 #define STU_RTMP_MSG_TYPE_ACK                 0x03
@@ -62,6 +64,13 @@
 #define STU_RTMP_VIDEO_CODEC_SCREEN_VIDEO_2  0x06
 #define STU_RTMP_VIDEO_CODEC_AVC             0x07
 
+#define STU_RTMP_AAC_TYPE_SPECIFIC_CONFIG    0x00
+#define STU_RTMP_AAC_TYPE_RAW_FRAME_DATA     0x01
+
+#define STU_RTMP_AVC_TYPE_SEQUENCE_HEADER    0x00
+#define STU_RTMP_AVC_TYPE_NALU               0x01
+#define STU_RTMP_AVC_TYPE_END_OF_SEQUENCE    0x02
+
 extern stu_str_t  STU_RTMP_CMD_CONNECT;
 extern stu_str_t  STU_RTMP_CMD_CLOSE;
 extern stu_str_t  STU_RTMP_CMD_CREATE_STREAM;
@@ -79,11 +88,15 @@ extern stu_str_t  STU_RTMP_CMD_SEEK;
 extern stu_str_t  STU_RTMP_CMD_PAUSE;
 extern stu_str_t  STU_RTMP_CMD_ON_STATUS;
 
+// outdated command
+extern stu_str_t  STU_RTMP_CMD_RELEASE_STREAM;
+extern stu_str_t  STU_RTMP_CMD_FC_PUBLISH;
+extern stu_str_t  STU_RTMP_CMD_ON_FC_PUBLISH;
+
 extern stu_str_t  STU_RTMP_SET_BUFFER_LENGTH;
 extern stu_str_t  STU_RTMP_SET_DATA_FRAME;
 extern stu_str_t  STU_RTMP_CLEAR_DATA_FRAME;
-extern stu_str_t  STU_RTMP_AUDIO_FRAME;
-extern stu_str_t  STU_RTMP_VIDEO_FRAME;
+extern stu_str_t  STU_RTMP_ON_META_DATA;
 
 extern stu_str_t  STU_RTMP_LEVEL_ERROR;
 extern stu_str_t  STU_RTMP_LEVEL_STATUS;
@@ -126,6 +139,13 @@ extern stu_str_t  STU_RTMP_CODE_NETSTREAM_STEP_NOTIFY;
 extern stu_str_t  STU_RTMP_CODE_NETSTREAM_UNPAUSE_NOTIFY;
 extern stu_str_t  STU_RTMP_CODE_NETSTREAM_UNPUBLISH_SUCCESS;
 extern stu_str_t  STU_RTMP_CODE_NETSTREAM_VIDEO_DIMENSIONCHANGE;
+
+typedef stu_int32_t (*stu_rtmp_command_handler_pt)(stu_rtmp_request_t *r);
+
+typedef struct {
+	stu_str_t                    name;
+	stu_rtmp_command_handler_pt  handler;
+} stu_rtmp_command_t;
 
 typedef struct {
 	stu_uint8_t                type;        // 1 byte
@@ -216,5 +236,8 @@ typedef struct {
 	stu_queue_t                body;
 	stu_buf_t                  payload;
 } stu_rtmp_aggregate_message_t;
+
+
+stu_int32_t  stu_rtmp_message_init();
 
 #endif /* STUDEASE_CN_RTMP_STU_RTMP_MESSAGE_H_ */

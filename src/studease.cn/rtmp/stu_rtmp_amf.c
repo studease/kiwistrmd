@@ -494,7 +494,7 @@ stu_rtmp_amf_parse(u_char *data, size_t len) {
 
 	n = stu_rtmp_amf_parse_value(root, data, len, &err);
 	if (err != NULL) {
-		stu_log_error(0, "Failed to parse AMF: %s", err);
+		stu_log_debug(4, "Failed to parse AMF: %s", err);
 		stu_rtmp_amf_delete(root);
 		return NULL;
 	}
@@ -514,7 +514,7 @@ stu_rtmp_amf_parse_value(stu_rtmp_amf_t *item, u_char *data, size_t len, u_char 
 	cost = 0;
 
 	if (len < 1) {
-		stu_log_error(0, "Data not enough while decoding AMF value.");
+		stu_log_debug(4, "Data not enough while decoding AMF value.");
 		*err = p;
 		goto failed;
 	}

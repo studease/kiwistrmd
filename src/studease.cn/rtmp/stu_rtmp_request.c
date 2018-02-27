@@ -24,26 +24,51 @@ static stu_int32_t  stu_rtmp_process_aggregate(stu_rtmp_request_t *r);
 static stu_rtmp_aggregate_body_t *
                     stu_rtmp_process_aggregate_body(stu_buf_t *b);
 
+static stu_int32_t  stu_rtmp_process_command_connect(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_process_command_close(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_process_command_create_stream(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_process_command_result(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_process_command_error(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_process_command_play(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_process_command_play2(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_process_command_release_stream(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_process_command_delete_stream(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_process_command_close_stream(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_process_command_receive_audio(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_process_command_receive_video(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_process_command_fcpublish(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_process_command_publish(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_process_command_seek(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_process_command_pause(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_process_command_on_status(stu_rtmp_request_t *r);
+
+extern stu_hash_t  stu_rtmp_command_hash;
 extern stu_hash_t  stu_rtmp_filter_hash;
 extern stu_list_t  stu_rtmp_phases;
 
-extern stu_str_t  stu_rtmp_definst;
+extern stu_str_t   stu_rtmp_definst;
 
-extern stu_str_t  STU_RTMP_CMD_CONNECT;
-extern stu_str_t  STU_RTMP_CMD_CLOSE;
-extern stu_str_t  STU_RTMP_CMD_CREATE_STREAM;
-extern stu_str_t  STU_RTMP_CMD_RESULT;
-extern stu_str_t  STU_RTMP_CMD_ERROR;
-extern stu_str_t  STU_RTMP_CMD_PLAY;
-extern stu_str_t  STU_RTMP_CMD_PLAY2;
-extern stu_str_t  STU_RTMP_CMD_DELETE_STREAM;
-extern stu_str_t  STU_RTMP_CMD_CLOSE_STREAM;
-extern stu_str_t  STU_RTMP_CMD_RECEIVE_AUDIO;
-extern stu_str_t  STU_RTMP_CMD_RECEIVE_VIDEO;
-extern stu_str_t  STU_RTMP_CMD_PUBLISH;
-extern stu_str_t  STU_RTMP_CMD_SEEK;
-extern stu_str_t  STU_RTMP_CMD_PAUSE;
-extern stu_str_t  STU_RTMP_CMD_ON_STATUS;
+stu_rtmp_command_t  rtmp_command[] = {
+	{ stu_string("connect"),       stu_rtmp_process_command_connect },
+	{ stu_string("close"),         stu_rtmp_process_command_close },
+	{ stu_string("createStream"),  stu_rtmp_process_command_create_stream },
+	{ stu_string("_result"),       stu_rtmp_process_command_result },
+	{ stu_string("_error"),        stu_rtmp_process_command_error },
+
+	{ stu_string("play"),          stu_rtmp_process_command_play },
+	{ stu_string("play2"),         stu_rtmp_process_command_play2 },
+	{ stu_string("releaseStream"), stu_rtmp_process_command_release_stream },
+	{ stu_string("deleteStream"),  stu_rtmp_process_command_delete_stream },
+	{ stu_string("closeStream"),   stu_rtmp_process_command_close_stream },
+	{ stu_string("receiveAudio"),  stu_rtmp_process_command_receive_audio },
+	{ stu_string("receiveVideo"),  stu_rtmp_process_command_receive_video },
+	{ stu_string("FCPublish"),     stu_rtmp_process_command_fcpublish },
+	{ stu_string("publish"),       stu_rtmp_process_command_publish },
+	{ stu_string("seek"),          stu_rtmp_process_command_seek },
+	{ stu_string("pause"),         stu_rtmp_process_command_pause },
+	{ stu_string("onStatus"),      stu_rtmp_process_command_on_status },
+	{ stu_null_string, NULL }
+};
 
 
 void
@@ -412,6 +437,10 @@ stu_rtmp_process_user_control(stu_rtmp_request_t *r) {
 	b = &ck->payload;
 	r->message = &m;
 
+	m.payload.start = m.payload.pos = b->start;
+	m.payload.end = m.payload.last = b->end;
+	m.payload.size = b->size;
+
 	stu_memzero(&m, sizeof(stu_rtmp_user_control_message_t));
 
 	if (b->last - b->pos < 6) {
@@ -499,6 +528,10 @@ stu_rtmp_process_bandwidth(stu_rtmp_request_t *r) {
 	b = &ck->payload;
 	r->message = &m;
 
+	m.payload.start = m.payload.pos = b->start;
+	m.payload.end = m.payload.last = b->end;
+	m.payload.size = b->size;
+
 	stu_memzero(&m, sizeof(stu_rtmp_bandwidth_message_t));
 
 	if (b->last - b->pos < 5) {
@@ -522,32 +555,40 @@ static stu_int32_t
 stu_rtmp_process_audio(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t         *ck;
 	stu_buf_t                *b;
-	stu_rtmp_audio_message_t  m;
+	stu_rtmp_audio_message_t *m;
 
 	ck = r->chunk_in;
 	b = &ck->payload;
-	r->message = &m;
 
-	stu_memzero(&m, sizeof(stu_rtmp_audio_message_t));
+	m = stu_calloc(sizeof(stu_rtmp_audio_message_t));
+	if (m == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of audio: Malloc failed.");
+		return STU_ERROR;
+	}
+
+	r->message = m;
+
+	m->payload.start = m->payload.pos = b->start;
+	m->payload.end = m->payload.last = b->end;
+	m->payload.size = b->size;
 
 	if (b->last - b->pos < 2) {
 		stu_log_error(0, "Failed to parse rtmp message of audio: Data not enough.");
 		return STU_ERROR;
 	}
 
-	m.header.payload_len = ck->header.message_len - 11;
+	m->header.payload_len = ck->header.message_len - 11;
 
-	m.format = (*b->pos >> 4) & 0x0F;
-	m.sample_rate = (*b->pos >> 2) & 0x03;
-	m.sample_size = (*b->pos >> 1) & 0x01;
-	m.channels = *b->pos & 0x01;
+	m->format = (*b->pos >> 4) & 0x0F;
+	m->sample_rate = (*b->pos >> 2) & 0x03;
+	m->sample_size = (*b->pos >> 1) & 0x01;
+	m->channels = *b->pos & 0x01;
 	b->pos++;
 
-	m.data_type = *b->pos++;
+	m->data_type = *b->pos++;
 
-	m.payload.start = m.payload.pos = b->start;
-	m.payload.end = m.payload.last = b->end;
-	m.payload.size = b->size;
+	// handle message
+	stu_rtmp_on_audio_frame(&r->ns);
 
 	return STU_OK;
 }
@@ -556,30 +597,38 @@ static stu_int32_t
 stu_rtmp_process_video(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t         *ck;
 	stu_buf_t                *b;
-	stu_rtmp_video_message_t  m;
+	stu_rtmp_video_message_t *m;
 
 	ck = r->chunk_in;
 	b = &ck->payload;
-	r->message = &m;
 
-	stu_memzero(&m, sizeof(stu_rtmp_video_message_t));
+	m = stu_calloc(sizeof(stu_rtmp_video_message_t));
+	if (m == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of video: Malloc failed.");
+		return STU_ERROR;
+	}
+
+	r->message = m;
+
+	m->payload.start = m->payload.pos = b->start;
+	m->payload.end = m->payload.last = b->end;
+	m->payload.size = b->size;
 
 	if (b->last - b->pos < 2) {
 		stu_log_error(0, "Failed to parse rtmp message of video: Data not enough.");
 		return STU_ERROR;
 	}
 
-	m.header.payload_len = ck->header.message_len - 11;
+	m->header.payload_len = ck->header.message_len - 11;
 
-	m.frame_type = (*b->pos >> 4) & 0x0F;
-	m.codec = *b->pos & 0x03;
+	m->frame_type = (*b->pos >> 4) & 0x0F;
+	m->codec = *b->pos & 0x03;
 	b->pos++;
 
-	m.data_type = *b->pos++;
+	m->data_type = *b->pos++;
 
-	m.payload.start = m.payload.pos = b->start;
-	m.payload.end = m.payload.last = b->end;
-	m.payload.size = b->size;
+	// handle message
+	stu_rtmp_on_video_frame(&r->ns);
 
 	return STU_OK;
 }
@@ -589,39 +638,85 @@ stu_rtmp_process_data(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t        *ck;
 	stu_buf_t               *b;
 	stu_rtmp_amf_t          *v;
-	stu_rtmp_data_message_t  m;
+	stu_rtmp_data_message_t *m;
+	stu_str_t                s;
 
 	ck = r->chunk_in;
 	b = &ck->payload;
-	r->message = &m;
 
-	stu_memzero(&m, sizeof(stu_rtmp_data_message_t));
+	m = stu_calloc(sizeof(stu_rtmp_data_message_t));
+	if (m == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of data: Malloc failed.");
+		return STU_ERROR;
+	}
 
+	r->message = m;
+
+	m->payload.start = m->payload.pos = b->start;
+	m->payload.end = m->payload.last = b->end;
+	m->payload.size = b->size;
+
+	// handler
 	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp message of data: Bad AMF format[1].");
 		return STU_ERROR;
 	}
 
-	m.handler = *(stu_str_t *) v->value;
+	s = *(stu_str_t *) v->value;
 	b->pos += v->cost;
 
+	m->handler.data = stu_calloc(s.len + 1);
+	if (m->handler.data == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Malloc failed.");
+		return STU_ERROR;
+	}
+
+	(void) stu_memcpy(m->handler.data, s.data, s.len);
+	m->handler.len = s.len;
+
+	stu_rtmp_amf_delete(v);
+
+	// key
 	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp message of data: Bad AMF format[2].");
 		return STU_ERROR;
 	}
 
-	m.key = *(stu_str_t *) v->value;
+	s = *(stu_str_t *) v->value;
 	b->pos += v->cost;
 
+	m->key.data = stu_calloc(s.len + 1);
+	if (m->key.data == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Malloc failed.");
+		return STU_ERROR;
+	}
+
+	(void) stu_memcpy(m->key.data, s.data, s.len);
+	m->key.len = s.len;
+
+	stu_rtmp_amf_delete(v);
+
+	// value
 	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-	m.value = v;
+	m->value = v;
 	b->pos += v ? v->cost : 0;
 
-	m.payload.start = m.payload.pos = b->start;
-	m.payload.end = m.payload.last = b->end;
-	m.payload.size = b->size;
+	// handle message
+	if (stu_strncmp(STU_RTMP_SET_DATA_FRAME.data, m->handler.data, m->handler.len) == 0) {
+		stu_rtmp_on_set_data_frame(&r->ns);
+		goto done;
+	}
+
+	if (stu_strncmp(STU_RTMP_CLEAR_DATA_FRAME.data, m->handler.data, m->handler.len) == 0) {
+		stu_rtmp_on_clear_data_frame(&r->ns);
+		goto done;
+	}
+
+done:
+
+	// delete data frame on release
 
 	return STU_OK;
 }
@@ -630,14 +725,19 @@ static stu_int32_t
 stu_rtmp_process_command(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t           *ck;
 	stu_buf_t                  *b;
-	stu_rtmp_amf_t             *v, *item;
-	stu_str_t                  *val, key, dst;
+	stu_rtmp_amf_t             *v;
+	stu_rtmp_command_t         *command;
 	stu_rtmp_command_message_t  m;
-	stu_int32_t                 rc;
+	stu_str_t                   dst;
+	stu_uint32_t                hk;
 
 	ck = r->chunk_in;
 	b = &ck->payload;
 	r->message = &m;
+
+	m.payload.start = m.payload.pos = b->start;
+	m.payload.end = m.payload.last = b->end;
+	m.payload.size = b->size;
 
 	stu_memzero(&m, sizeof(stu_rtmp_command_message_t));
 
@@ -679,554 +779,891 @@ stu_rtmp_process_command(stu_rtmp_request_t *r) {
 
 	stu_rtmp_amf_delete(v);
 
-	// cmd: connect
-	if (stu_strncmp(m.name.data, STU_RTMP_CMD_CONNECT.data, STU_RTMP_CMD_CONNECT.len) == 0) {
-		// command object
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[3].");
-			return STU_ERROR;
-		}
+	// process command
+	hk = stu_hash_key(m.name.data, m.name.len, stu_rtmp_command_hash.flags);
 
-		stu_str_set(&key, "app");
-		item = stu_rtmp_amf_get_object_item_by(v, &key);
-		if (item && item->type == STU_RTMP_AMF_STRING) {
-			val = (stu_str_t *) item->value;
+	command = stu_hash_find_locked(&stu_rtmp_command_hash, hk, m.name.data, m.name.len);
+	if (command == NULL) {
+		stu_log_debug(4, "Unrecognized rtmp command: %s.", m.name.data);
 
-			r->nc.app_name.len = val->len;
-			r->nc.app_name.data = stu_pcalloc(r->nc.connection->pool, val->len + 1);
-			stu_strncpy(r->nc.app_name.data, val->data, val->len);
-		}
+		stu_free(m.name.data);
+		stu_str_null(&m.name);
 
-		stu_str_set(&key, "tcUrl");
-		item = stu_rtmp_amf_get_object_item_by(v, &key);
-		if (item && item->type == STU_RTMP_AMF_STRING) {
-			val = (stu_str_t *) item->value;
+		return STU_OK; // Ignore command only.
+	}
 
-			rc = stu_rtmp_parse_url(val, &dst, STU_RTMP_URL_FLAG_INST);
-			if (rc == STU_ERROR) {
-				stu_log_error(0, "Failed to parse rtmp instance name.");
-				return STU_ERROR;
-			}
+	return command->handler(r);
+}
 
-			if (rc == STU_AGAIN) {
-				dst = stu_rtmp_definst;
-			}
+static stu_int32_t
+stu_rtmp_process_command_connect(stu_rtmp_request_t *r) {
+	stu_rtmp_chunk_t           *ck;
+	stu_buf_t                  *b;
+	stu_rtmp_amf_t             *v, *item;
+	stu_str_t                  *val, key, dst;
+	stu_rtmp_command_message_t *m;
+	stu_int32_t                 rc;
 
-			r->nc.inst_name.len = dst.len;
-			r->nc.inst_name.data = stu_pcalloc(r->nc.connection->pool, dst.len + 1);
-			stu_strncpy(r->nc.inst_name.data, dst.data, dst.len);
-		}
+	ck = r->chunk_in;
+	b = &ck->payload;
+	m = r->message;
 
-		stu_str_set(&key, "objectEncoding");
-		item = stu_rtmp_amf_get_object_item_by(v, &key);
-		if (item && item->type == STU_RTMP_AMF_DOUBLE) {
-			r->nc.object_encoding = *(stu_double_t *) item->value;
-		}
+	rc = STU_ERROR;
 
-		m.command_obj = v;
-		b->pos += v->cost;
+	// command object
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[3].");
+		return STU_ERROR;
+	}
 
-		// arguments
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		m.arguments = v;
-		b->pos += v ? v->cost : 0;
+	stu_str_set(&key, "app");
+	item = stu_rtmp_amf_get_object_item_by(v, &key);
+	if (item && item->type == STU_RTMP_AMF_STRING) {
+		val = (stu_str_t *) item->value;
 
-		if (stu_rtmp_on_connect(&r->nc) == STU_ERROR) {
+		r->nc.app_name.len = val->len;
+		r->nc.app_name.data = stu_pcalloc(r->nc.connection->pool, val->len + 1);
+		stu_strncpy(r->nc.app_name.data, val->data, val->len);
+	}
+
+	stu_str_set(&key, "tcUrl");
+	item = stu_rtmp_amf_get_object_item_by(v, &key);
+	if (item && item->type == STU_RTMP_AMF_STRING) {
+		val = (stu_str_t *) item->value;
+
+		rc = stu_rtmp_parse_url(val, &dst, STU_RTMP_URL_FLAG_INST);
+		if (rc == STU_ERROR) {
+			stu_log_error(0, "Failed to parse rtmp instance name.");
 			goto failed;
 		}
 
-		stu_rtmp_amf_delete(m.command_obj);
-		stu_rtmp_amf_delete(m.arguments);
+		if (rc == STU_AGAIN) {
+			dst = stu_rtmp_definst;
+		}
 
-		goto done;
+		r->nc.inst_name.len = dst.len;
+		r->nc.inst_name.data = stu_pcalloc(r->nc.connection->pool, dst.len + 1);
+		stu_strncpy(r->nc.inst_name.data, dst.data, dst.len);
 	}
 
-	// cmd: close
-	if (stu_strncmp(m.name.data, STU_RTMP_CMD_CLOSE.data, STU_RTMP_CMD_CLOSE.len) == 0) {
-		if (stu_rtmp_on_close(&r->nc) == STU_ERROR) {
-			goto failed;
-		}
-
-		goto done;
+	stu_str_set(&key, "objectEncoding");
+	item = stu_rtmp_amf_get_object_item_by(v, &key);
+	if (item && item->type == STU_RTMP_AMF_DOUBLE) {
+		r->nc.object_encoding = *(stu_double_t *) item->value;
 	}
 
-	// cmd: create stream
-	if (stu_strncmp(m.name.data, STU_RTMP_CMD_CREATE_STREAM.data, STU_RTMP_CMD_CREATE_STREAM.len) == 0) {
-		// command object
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[4].");
-			return STU_ERROR;
-		}
+	m->command_obj = v;
+	b->pos += v->cost;
 
-		m.command_obj = v;
-		b->pos += v->cost;
+	// arguments
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	m->arguments = v;
+	b->pos += v ? v->cost : 0;
 
-		if (stu_rtmp_on_create_stream(&r->nc) == STU_ERROR) {
-			goto failed;
-		}
-
-		stu_rtmp_amf_delete(m.command_obj);
-
-		goto done;
+	// handler
+	if (stu_rtmp_on_connect(&r->nc) == STU_ERROR) {
+		goto failed;
 	}
 
-	// cmd: result
-	if (stu_strncmp(m.name.data, STU_RTMP_CMD_RESULT.data, STU_RTMP_CMD_RESULT.len) == 0) {
-		// command object
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[5].");
-			return STU_ERROR;
-		}
-
-		m.command_obj = v;
-		b->pos += v->cost;
-
-		// response
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[6].");
-			return STU_ERROR;
-		}
-
-		m.response = v;
-		b->pos += v->cost;
-
-		if (stu_rtmp_on_result(&r->nc) == STU_ERROR) {
-			goto failed;
-		}
-
-		stu_rtmp_amf_delete(m.command_obj);
-		stu_rtmp_amf_delete(m.response);
-
-		goto done;
-	}
-
-	// cmd: error
-	if (stu_strncmp(m.name.data, STU_RTMP_CMD_ERROR.data, STU_RTMP_CMD_ERROR.len) == 0) {
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[5].");
-			return STU_ERROR;
-		}
-
-		m.command_obj = v;
-		b->pos += v->cost;
-
-		// response
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[6].");
-			return STU_ERROR;
-		}
-
-		m.response = v;
-		b->pos += v->cost;
-
-		if (stu_rtmp_on_error(&r->nc) == STU_ERROR) {
-			goto failed;
-		}
-
-		stu_rtmp_amf_delete(m.command_obj);
-		stu_rtmp_amf_delete(m.response);
-
-		goto done;
-	}
-
-	// cmd: play
-	if (stu_strncmp(m.name.data, STU_RTMP_CMD_PLAY.data, STU_RTMP_CMD_PLAY.len) == 0) {
-		// command object
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[7].");
-			return STU_ERROR;
-		}
-
-		m.command_obj = v; // null
-		b->pos += v->cost;
-
-		// stream name
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[8].");
-			return STU_ERROR;
-		}
-
-		dst = *(stu_str_t *) v->value;
-		b->pos += v->cost;
-
-		m.stream_name.data = stu_calloc(dst.len + 1);
-		if (m.stream_name.data == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Malloc failed.");
-			return STU_ERROR;
-		}
-
-		(void) stu_memcpy(m.stream_name.data, dst.data, dst.len);
-		m.stream_name.len = dst.len;
-
-		stu_rtmp_amf_delete(v);
-
-		// start
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		m.start = v ? *(stu_double_t *) v->value : -2;
-		b->pos += v->cost;
-
-		stu_rtmp_amf_delete(v);
-
-		// duration
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		m.duration = v ? *(stu_double_t *) v->value : -1;
-		b->pos += v->cost;
-
-		stu_rtmp_amf_delete(v);
-
-		// reset
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		m.reset = v ? (stu_bool_t) v->value : TRUE;
-		b->pos += v->cost;
-
-		stu_rtmp_amf_delete(v);
-
-		if (stu_rtmp_on_play(&r->ns) == STU_ERROR) {
-			goto failed;
-		}
-
-		stu_rtmp_amf_delete(m.command_obj);
-		stu_free(m.stream_name.data);
-
-		goto done;
-	}
-
-	// cmd: play2
-	if (stu_strncmp(m.name.data, STU_RTMP_CMD_PLAY2.data, STU_RTMP_CMD_PLAY2.len) == 0) {
-		// command object
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[9].");
-			return STU_ERROR;
-		}
-
-		m.command_obj = v; // null
-		b->pos += v->cost;
-
-		// arguments
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[10].");
-			return STU_ERROR;
-		}
-
-		m.arguments = v;
-		b->pos += v->cost;
-
-		if (stu_rtmp_on_play2(&r->ns) == STU_ERROR) {
-			goto failed;
-		}
-
-		stu_rtmp_amf_delete(m.command_obj);
-		stu_rtmp_amf_delete(m.arguments);
-
-		goto done;
-	}
-
-	// cmd: delete stream
-	if (stu_strncmp(m.name.data, STU_RTMP_CMD_DELETE_STREAM.data, STU_RTMP_CMD_DELETE_STREAM.len) == 0) {
-		// command object
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[11].");
-			return STU_ERROR;
-		}
-
-		m.command_obj = v; // null
-		b->pos += v->cost;
-
-		// stream id
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[12].");
-			return STU_ERROR;
-		}
-
-		m.stream_id = *(stu_double_t *) v->value;
-		b->pos += v->cost;
-
-		stu_rtmp_amf_delete(v);
-
-		if (stu_rtmp_on_delete_stream(&r->ns) == STU_ERROR) {
-			goto failed;
-		}
-
-		stu_rtmp_amf_delete(m.command_obj);
-
-		goto done;
-	}
-
-	// cmd: close stream
-	if (stu_strncmp(m.name.data, STU_RTMP_CMD_CLOSE_STREAM.data, STU_RTMP_CMD_CLOSE_STREAM.len) == 0) {
-		if (stu_rtmp_on_close_stream(&r->ns) == STU_ERROR) {
-			goto failed;
-		}
-
-		goto done;
-	}
-
-	// cmd: receive audio
-	if (stu_strncmp(m.name.data, STU_RTMP_CMD_RECEIVE_AUDIO.data, STU_RTMP_CMD_RECEIVE_AUDIO.len) == 0) {
-		// command object
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[13].");
-			return STU_ERROR;
-		}
-
-		m.command_obj = v; // null
-		b->pos += v->cost;
-
-		// flag
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[14].");
-			return STU_ERROR;
-		}
-
-		m.flag = (stu_bool_t) v->value;
-		b->pos += v->cost;
-
-		stu_rtmp_amf_delete(v);
-
-		if (stu_rtmp_on_receive_audio(&r->ns) == STU_ERROR) {
-			goto failed;
-		}
-
-		stu_rtmp_amf_delete(m.command_obj);
-
-		goto done;
-	}
-
-	// cmd: receive video
-	if (stu_strncmp(m.name.data, STU_RTMP_CMD_RECEIVE_VIDEO.data, STU_RTMP_CMD_RECEIVE_VIDEO.len) == 0) {
-		// command object
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[13].");
-			return STU_ERROR;
-		}
-
-		m.command_obj = v; // null
-		b->pos += v->cost;
-
-		// flag
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[14].");
-			return STU_ERROR;
-		}
-
-		m.flag = (stu_bool_t) v->value;
-		b->pos += v->cost;
-
-		stu_rtmp_amf_delete(v);
-
-		if (stu_rtmp_on_receive_video(&r->ns) == STU_ERROR) {
-			goto failed;
-		}
-
-		stu_rtmp_amf_delete(m.command_obj);
-
-		goto done;
-	}
-
-	// cmd: publish
-	if (stu_strncmp(m.name.data, STU_RTMP_CMD_PUBLISH.data, STU_RTMP_CMD_PUBLISH.len) == 0) {
-		// command object
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[15].");
-			return STU_ERROR;
-		}
-
-		m.command_obj = v; // null
-		b->pos += v->cost;
-
-		// publishing name
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[16].");
-			return STU_ERROR;
-		}
-
-		dst = *(stu_str_t *) v->value;
-		b->pos += v->cost;
-
-		m.publishing_name.data = stu_calloc(dst.len + 1);
-		if (m.publishing_name.data == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Malloc failed.");
-			return STU_ERROR;
-		}
-
-		(void) stu_memcpy(m.publishing_name.data, dst.data, dst.len);
-		m.publishing_name.len = dst.len;
-
-		stu_rtmp_amf_delete(v);
-
-		// publishing type
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[17].");
-			return STU_ERROR;
-		}
-
-		dst = *(stu_str_t *) v->value;
-		b->pos += v->cost;
-
-		m.publishing_type.data = stu_calloc(dst.len + 1);
-		if (m.publishing_type.data == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Malloc failed.");
-			return STU_ERROR;
-		}
-
-		(void) stu_memcpy(m.publishing_type.data, dst.data, dst.len);
-		m.publishing_type.len = dst.len;
-
-		stu_rtmp_amf_delete(v);
-
-		if (stu_rtmp_on_publish(&r->ns) == STU_ERROR) {
-			goto failed;
-		}
-
-		stu_rtmp_amf_delete(m.command_obj);
-		stu_free(m.publishing_name.data);
-		stu_free(m.publishing_type.data);
-
-		goto done;
-	}
-
-	// cmd: seek
-	if (stu_strncmp(m.name.data, STU_RTMP_CMD_SEEK.data, STU_RTMP_CMD_SEEK.len) == 0) {
-		// command object
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[18].");
-			return STU_ERROR;
-		}
-
-		m.command_obj = v; // null
-		b->pos += v->cost;
-
-		// milliseconds
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[19].");
-			return STU_ERROR;
-		}
-
-		m.milliseconds = *(stu_double_t *) v->value;
-		b->pos += v->cost;
-
-		stu_rtmp_amf_delete(v);
-
-		if (stu_rtmp_on_seek(&r->ns) == STU_ERROR) {
-			goto failed;
-		}
-
-		stu_rtmp_amf_delete(m.command_obj);
-
-		goto done;
-	}
-
-	// cmd: pause
-	if (stu_strncmp(m.name.data, STU_RTMP_CMD_PAUSE.data, STU_RTMP_CMD_PAUSE.len) == 0) {
-		// command object
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[20].");
-			return STU_ERROR;
-		}
-
-		m.command_obj = v; // null
-		b->pos += v->cost;
-
-		// pause
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[21].");
-			return STU_ERROR;
-		}
-
-		m.pause = (stu_bool_t) v->value;
-		b->pos += v->cost;
-
-		stu_rtmp_amf_delete(v);
-
-		// milliseconds
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[22].");
-			return STU_ERROR;
-		}
-
-		m.milliseconds = *(stu_double_t *) v->value;
-		b->pos += v->cost;
-
-		stu_rtmp_amf_delete(v);
-
-		if (stu_rtmp_on_pause(&r->ns) == STU_ERROR) {
-			goto failed;
-		}
-
-		stu_rtmp_amf_delete(m.command_obj);
-
-		goto done;
-	}
-
-	// cmd: on status
-	if (stu_strncmp(m.name.data, STU_RTMP_CMD_ON_STATUS.data, STU_RTMP_CMD_ON_STATUS.len) == 0) {
-		// command object
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[23].");
-			return STU_ERROR;
-		}
-
-		m.command_obj = v; // null
-		b->pos += v->cost;
-
-		// response
-		v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
-		if (v == NULL) {
-			stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[24].");
-			return STU_ERROR;
-		}
-
-		m.response = v;
-		b->pos += v->cost;
-
-		if (stu_rtmp_on_status(&r->ns) == STU_ERROR) {
-			goto failed;
-		}
-
-		stu_rtmp_amf_delete(m.command_obj);
-		stu_rtmp_amf_delete(m.response);
-
-		goto done;
-	}
+	rc = STU_OK;
 
 failed:
 
-	stu_log_error(0, "Failed to handle command: %s.", m.name.data);
+	stu_rtmp_amf_delete(m->command_obj);
+	stu_rtmp_amf_delete(m->arguments);
 
-done:
+	return rc;
+}
 
-	stu_free(m.name.data);
+static stu_int32_t
+stu_rtmp_process_command_close(stu_rtmp_request_t *r) {
+	stu_int32_t  rc;
 
-	m.payload.start = m.payload.pos = b->start;
-	m.payload.end = m.payload.last = b->end;
-	m.payload.size = b->size;
+	rc = STU_ERROR;
 
-	return STU_OK;
+	// handler
+	if (stu_rtmp_on_close(&r->nc) == STU_ERROR) {
+		goto failed;
+	}
+
+	rc = STU_OK;
+
+failed:
+
+	return rc;
+}
+
+static stu_int32_t
+stu_rtmp_process_command_create_stream(stu_rtmp_request_t *r) {
+	stu_rtmp_chunk_t           *ck;
+	stu_buf_t                  *b;
+	stu_rtmp_amf_t             *v;
+	stu_rtmp_command_message_t *m;
+	stu_int32_t                 rc;
+
+	ck = r->chunk_in;
+	b = &ck->payload;
+	m = r->message;
+
+	rc = STU_ERROR;
+
+	// command object
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[4].");
+		return STU_ERROR;
+	}
+
+	m->command_obj = v;
+	b->pos += v->cost;
+
+	// handler
+	if (stu_rtmp_on_create_stream(&r->nc) == STU_ERROR) {
+		goto failed;
+	}
+
+	rc = STU_OK;
+
+failed:
+
+	stu_rtmp_amf_delete(m->command_obj);
+
+	return rc;
+}
+
+static stu_int32_t
+stu_rtmp_process_command_result(stu_rtmp_request_t *r) {
+	stu_rtmp_chunk_t           *ck;
+	stu_buf_t                  *b;
+	stu_rtmp_amf_t             *v;
+	stu_rtmp_command_message_t *m;
+	stu_int32_t                 rc;
+
+	ck = r->chunk_in;
+	b = &ck->payload;
+	m = r->message;
+
+	rc = STU_ERROR;
+
+	// command object
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[5].");
+		return STU_ERROR;
+	}
+
+	m->command_obj = v;
+	b->pos += v->cost;
+
+	// response
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[6].");
+		goto failed;
+	}
+
+	m->response = v;
+	b->pos += v->cost;
+
+	// handler
+	if (stu_rtmp_on_result(&r->nc) == STU_ERROR) {
+		goto failed;
+	}
+
+	rc = STU_OK;
+
+failed:
+
+	stu_rtmp_amf_delete(m->command_obj);
+	stu_rtmp_amf_delete(m->response);
+
+	return rc;
+}
+
+static stu_int32_t
+stu_rtmp_process_command_error(stu_rtmp_request_t *r) {
+	stu_rtmp_chunk_t           *ck;
+	stu_buf_t                  *b;
+	stu_rtmp_amf_t             *v;
+	stu_rtmp_command_message_t *m;
+	stu_int32_t                 rc;
+
+	ck = r->chunk_in;
+	b = &ck->payload;
+	m = r->message;
+
+	rc = STU_ERROR;
+
+	// command object
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[5].");
+		return STU_ERROR;
+	}
+
+	m->command_obj = v;
+	b->pos += v->cost;
+
+	// response
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[6].");
+		goto failed;
+	}
+
+	m->response = v;
+	b->pos += v->cost;
+
+	// handler
+	if (stu_rtmp_on_error(&r->nc) == STU_ERROR) {
+		goto failed;
+	}
+
+	rc = STU_OK;
+
+failed:
+
+	stu_rtmp_amf_delete(m->command_obj);
+	stu_rtmp_amf_delete(m->response);
+
+	return rc;
+}
+
+static stu_int32_t
+stu_rtmp_process_command_play(stu_rtmp_request_t *r) {
+	stu_rtmp_chunk_t           *ck;
+	stu_buf_t                  *b;
+	stu_rtmp_amf_t             *v;
+	stu_rtmp_command_message_t *m;
+	stu_str_t                   dst;
+	stu_int32_t                 rc;
+
+	ck = r->chunk_in;
+	b = &ck->payload;
+	m = r->message;
+
+	rc = STU_ERROR;
+
+	// command object
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[7].");
+		return STU_ERROR;
+	}
+
+	m->command_obj = v; // null
+	b->pos += v->cost;
+
+	// stream name
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[8].");
+		goto failed;
+	}
+
+	dst = *(stu_str_t *) v->value;
+	b->pos += v->cost;
+
+	m->stream_name.data = stu_calloc(dst.len + 1);
+	if (m->stream_name.data == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Malloc failed.");
+		goto failed;
+	}
+
+	(void) stu_memcpy(m->stream_name.data, dst.data, dst.len);
+	m->stream_name.len = dst.len;
+
+	// start
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	m->start = v ? *(stu_double_t *) v->value : -2;
+	b->pos += v->cost;
+
+	stu_rtmp_amf_delete(v);
+
+	// duration
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	m->duration = v ? *(stu_double_t *) v->value : -1;
+	b->pos += v->cost;
+
+	stu_rtmp_amf_delete(v);
+
+	// reset
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	m->reset = v ? (stu_bool_t) v->value : TRUE;
+	b->pos += v->cost;
+
+	stu_rtmp_amf_delete(v);
+
+	// handler
+	if (stu_rtmp_on_play(&r->ns) == STU_ERROR) {
+		goto failed;
+	}
+
+	rc = STU_OK;
+
+failed:
+
+	stu_rtmp_amf_delete(m->command_obj);
+
+	if (m->stream_name.data) {
+		stu_free(m->stream_name.data);
+		stu_str_null(&m->stream_name);
+	}
+
+	return rc;
+}
+
+static stu_int32_t
+stu_rtmp_process_command_play2(stu_rtmp_request_t *r) {
+	stu_rtmp_chunk_t           *ck;
+	stu_buf_t                  *b;
+	stu_rtmp_amf_t             *v;
+	stu_rtmp_command_message_t *m;
+	stu_int32_t                 rc;
+
+	ck = r->chunk_in;
+	b = &ck->payload;
+	m = r->message;
+
+	rc = STU_ERROR;
+
+	// command object
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[9].");
+		return STU_ERROR;
+	}
+
+	m->command_obj = v; // null
+	b->pos += v->cost;
+
+	// arguments
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[10].");
+		goto failed;
+	}
+
+	m->arguments = v;
+	b->pos += v->cost;
+
+	// handler
+	if (stu_rtmp_on_play2(&r->ns) == STU_ERROR) {
+		goto failed;
+	}
+
+	rc = STU_OK;
+
+failed:
+
+	stu_rtmp_amf_delete(m->command_obj);
+	stu_rtmp_amf_delete(m->arguments);
+
+	return rc;
+}
+
+static stu_int32_t
+stu_rtmp_process_command_release_stream(stu_rtmp_request_t *r) {
+	stu_rtmp_chunk_t           *ck;
+	stu_buf_t                  *b;
+	stu_rtmp_amf_t             *v;
+	stu_rtmp_command_message_t *m;
+	stu_str_t                   dst;
+	stu_int32_t                 rc;
+
+	ck = r->chunk_in;
+	b = &ck->payload;
+	m = r->message;
+
+	rc = STU_ERROR;
+
+	// command object
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[11].");
+		return STU_ERROR;
+	}
+
+	m->command_obj = v; // null
+	b->pos += v->cost;
+
+	// stream name
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[8].");
+		goto failed;
+	}
+
+	dst = *(stu_str_t *) v->value;
+	b->pos += v->cost;
+
+	m->stream_name.data = stu_calloc(dst.len + 1);
+	if (m->stream_name.data == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Malloc failed.");
+		goto failed;
+	}
+
+	(void) stu_memcpy(m->stream_name.data, dst.data, dst.len);
+	m->stream_name.len = dst.len;
+
+	stu_rtmp_amf_delete(v);
+
+	// handler
+	if (stu_rtmp_on_delete_stream(&r->ns) == STU_ERROR) {
+		goto failed;
+	}
+
+	rc = STU_OK;
+
+failed:
+
+	stu_rtmp_amf_delete(m->command_obj);
+
+	if (m->stream_name.data) {
+		stu_free(m->stream_name.data);
+		stu_str_null(&m->stream_name);
+	}
+
+	return rc;
+}
+
+static stu_int32_t
+stu_rtmp_process_command_delete_stream(stu_rtmp_request_t *r) {
+	stu_rtmp_chunk_t           *ck;
+	stu_buf_t                  *b;
+	stu_rtmp_amf_t             *v;
+	stu_rtmp_command_message_t *m;
+	stu_int32_t                 rc;
+
+	ck = r->chunk_in;
+	b = &ck->payload;
+	m = r->message;
+
+	rc = STU_ERROR;
+
+	// command object
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[11].");
+		return STU_ERROR;
+	}
+
+	m->command_obj = v; // null
+	b->pos += v->cost;
+
+	// stream id
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[12].");
+		goto failed;
+	}
+
+	m->stream_id = *(stu_double_t *) v->value;
+	b->pos += v->cost;
+
+	stu_rtmp_amf_delete(v);
+
+	// handler
+	if (stu_rtmp_on_delete_stream(&r->ns) == STU_ERROR) {
+		goto failed;
+	}
+
+	rc = STU_OK;
+
+failed:
+
+	stu_rtmp_amf_delete(m->command_obj);
+
+	return rc;
+}
+
+static stu_int32_t
+stu_rtmp_process_command_close_stream(stu_rtmp_request_t *r) {
+	stu_int32_t  rc;
+
+	rc = STU_ERROR;
+
+	// handler
+	if (stu_rtmp_on_close_stream(&r->ns) == STU_ERROR) {
+		goto failed;
+	}
+
+	rc = STU_OK;
+
+failed:
+
+	return rc;
+}
+
+static stu_int32_t
+stu_rtmp_process_command_receive_audio(stu_rtmp_request_t *r) {
+	stu_rtmp_chunk_t           *ck;
+	stu_buf_t                  *b;
+	stu_rtmp_amf_t             *v;
+	stu_rtmp_command_message_t *m;
+	stu_int32_t                 rc;
+
+	ck = r->chunk_in;
+	b = &ck->payload;
+	m = r->message;
+
+	rc = STU_ERROR;
+
+	// command object
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[13].");
+		return STU_ERROR;
+	}
+
+	m->command_obj = v; // null
+	b->pos += v->cost;
+
+	// flag
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[14].");
+		goto failed;
+	}
+
+	m->flag = (stu_bool_t) v->value;
+	b->pos += v->cost;
+
+	stu_rtmp_amf_delete(v);
+
+	// handler
+	if (stu_rtmp_on_receive_audio(&r->ns) == STU_ERROR) {
+		goto failed;
+	}
+
+	rc = STU_OK;
+
+failed:
+
+	stu_rtmp_amf_delete(m->command_obj);
+
+	return rc;
+}
+
+static stu_int32_t
+stu_rtmp_process_command_receive_video(stu_rtmp_request_t *r) {
+	stu_rtmp_chunk_t           *ck;
+	stu_buf_t                  *b;
+	stu_rtmp_amf_t             *v;
+	stu_rtmp_command_message_t *m;
+	stu_int32_t                 rc;
+
+	ck = r->chunk_in;
+	b = &ck->payload;
+	m = r->message;
+
+	rc = STU_ERROR;
+
+	// command object
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[13].");
+		return STU_ERROR;
+	}
+
+	m->command_obj = v; // null
+	b->pos += v->cost;
+
+	// flag
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[14].");
+		goto failed;
+	}
+
+	m->flag = (stu_bool_t) v->value;
+	b->pos += v->cost;
+
+	stu_rtmp_amf_delete(v);
+
+	// handler
+	if (stu_rtmp_on_receive_video(&r->ns) == STU_ERROR) {
+		goto failed;
+	}
+
+	rc = STU_OK;
+
+failed:
+
+	stu_rtmp_amf_delete(m->command_obj);
+
+	return rc;
+}
+
+static stu_int32_t
+stu_rtmp_process_command_fcpublish(stu_rtmp_request_t *r) {
+	stu_int32_t  rc;
+
+	rc = STU_ERROR;
+
+	// handler
+	if (stu_rtmp_on_fcpublish(&r->ns) == STU_ERROR) {
+		goto failed;
+	}
+
+	rc = STU_OK;
+
+failed:
+
+	return rc;
+}
+
+static stu_int32_t
+stu_rtmp_process_command_publish(stu_rtmp_request_t *r) {
+	stu_rtmp_chunk_t           *ck;
+	stu_buf_t                  *b;
+	stu_rtmp_amf_t             *v;
+	stu_rtmp_command_message_t *m;
+	stu_str_t                   dst;
+	stu_int32_t                 rc;
+
+	ck = r->chunk_in;
+	b = &ck->payload;
+	m = r->message;
+
+	rc = STU_ERROR;
+
+	// command object
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[15].");
+		return STU_ERROR;
+	}
+
+	m->command_obj = v; // null
+	b->pos += v->cost;
+
+	// publishing name
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[16].");
+		goto failed;
+	}
+
+	dst = *(stu_str_t *) v->value;
+	b->pos += v->cost;
+
+	m->publishing_name.data = stu_calloc(dst.len + 1);
+	if (m->publishing_name.data == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Malloc failed.");
+		goto failed;
+	}
+
+	(void) stu_memcpy(m->publishing_name.data, dst.data, dst.len);
+	m->publishing_name.len = dst.len;
+
+	stu_rtmp_amf_delete(v);
+
+	// publishing type
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[17].");
+		goto failed;
+	}
+
+	dst = *(stu_str_t *) v->value;
+	b->pos += v->cost;
+
+	m->publishing_type.data = stu_calloc(dst.len + 1);
+	if (m->publishing_type.data == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Malloc failed.");
+		goto failed;
+	}
+
+	(void) stu_memcpy(m->publishing_type.data, dst.data, dst.len);
+	m->publishing_type.len = dst.len;
+
+	stu_rtmp_amf_delete(v);
+
+	// handler
+	if (stu_rtmp_on_publish(&r->ns) == STU_ERROR) {
+		goto failed;
+	}
+
+	rc = STU_OK;
+
+failed:
+
+	stu_rtmp_amf_delete(m->command_obj);
+
+	if (m->publishing_name.data) {
+		stu_free(m->publishing_name.data);
+		stu_str_null(&m->publishing_name);
+	}
+
+	if (m->publishing_type.data) {
+		stu_free(m->publishing_type.data);
+		stu_str_null(&m->publishing_type);
+	}
+
+	return rc;
+}
+
+static stu_int32_t
+stu_rtmp_process_command_seek(stu_rtmp_request_t *r) {
+	stu_rtmp_chunk_t           *ck;
+	stu_buf_t                  *b;
+	stu_rtmp_amf_t             *v;
+	stu_rtmp_command_message_t *m;
+	stu_int32_t                 rc;
+
+	ck = r->chunk_in;
+	b = &ck->payload;
+	m = r->message;
+
+	rc = STU_ERROR;
+
+	// command object
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[18].");
+		return STU_ERROR;
+	}
+
+	m->command_obj = v; // null
+	b->pos += v->cost;
+
+	// milliseconds
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[19].");
+		goto failed;
+	}
+
+	m->milliseconds = *(stu_double_t *) v->value;
+	b->pos += v->cost;
+
+	stu_rtmp_amf_delete(v);
+
+	// handler
+	if (stu_rtmp_on_seek(&r->ns) == STU_ERROR) {
+		goto failed;
+	}
+
+	rc = STU_OK;
+
+failed:
+
+	stu_rtmp_amf_delete(m->command_obj);
+
+	return rc;
+}
+
+static stu_int32_t
+stu_rtmp_process_command_pause(stu_rtmp_request_t *r) {
+	stu_rtmp_chunk_t           *ck;
+	stu_buf_t                  *b;
+	stu_rtmp_amf_t             *v;
+	stu_rtmp_command_message_t *m;
+	stu_int32_t                 rc;
+
+	ck = r->chunk_in;
+	b = &ck->payload;
+	m = r->message;
+
+	rc = STU_ERROR;
+
+	// command object
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[20].");
+		return STU_ERROR;
+	}
+
+	m->command_obj = v; // null
+	b->pos += v->cost;
+
+	// pause
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[21].");
+		goto failed;
+	}
+
+	m->pause = (stu_bool_t) v->value;
+	b->pos += v->cost;
+
+	stu_rtmp_amf_delete(v);
+
+	// milliseconds
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[22].");
+		goto failed;
+	}
+
+	m->milliseconds = *(stu_double_t *) v->value;
+	b->pos += v->cost;
+
+	stu_rtmp_amf_delete(v);
+
+	// handler
+	if (stu_rtmp_on_pause(&r->ns) == STU_ERROR) {
+		goto failed;
+	}
+
+	rc = STU_OK;
+
+failed:
+
+	stu_rtmp_amf_delete(m->command_obj);
+
+	return rc;
+}
+
+static stu_int32_t
+stu_rtmp_process_command_on_status(stu_rtmp_request_t *r) {
+	stu_rtmp_chunk_t           *ck;
+	stu_buf_t                  *b;
+	stu_rtmp_amf_t             *v;
+	stu_rtmp_command_message_t *m;
+	stu_int32_t                 rc;
+
+	ck = r->chunk_in;
+	b = &ck->payload;
+	m = r->message;
+
+	rc = STU_ERROR;
+
+	// command object
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[23].");
+		return STU_ERROR;
+	}
+
+	m->command_obj = v; // null
+	b->pos += v->cost;
+
+	// response
+	v = stu_rtmp_amf_parse(b->pos, b->last - b->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[24].");
+		goto failed;
+	}
+
+	m->response = v;
+	b->pos += v->cost;
+
+	// handler
+	if (stu_rtmp_on_status(&r->ns) == STU_ERROR) {
+		goto failed;
+	}
+
+	rc = STU_OK;
+
+failed:
+
+	stu_rtmp_amf_delete(m->command_obj);
+	stu_rtmp_amf_delete(m->response);
+
+	return rc;
 }
 
 static stu_int32_t
@@ -1240,6 +1677,10 @@ stu_rtmp_process_aggregate(stu_rtmp_request_t *r) {
 	ck = r->chunk_in;
 	b = &ck->payload;
 	r->message = &m;
+
+	m.payload.start = m.payload.pos = b->start;
+	m.payload.end = m.payload.last = b->end;
+	m.payload.size = b->size;
 
 	stu_memzero(&m, sizeof(stu_rtmp_aggregate_message_t));
 
@@ -1273,10 +1714,6 @@ stu_rtmp_process_aggregate(stu_rtmp_request_t *r) {
 
 		stu_queue_insert_tail(&m.body, &body->queue);
 	}
-
-	m.payload.start = m.payload.pos = b->start;
-	m.payload.end = m.payload.last = b->end;
-	m.payload.size = b->size;
 
 	// TODO: handle message
 

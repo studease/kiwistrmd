@@ -12,6 +12,22 @@ extern stu_rtmp_amf_t *stu_rtmp_version;
 
 
 stu_int32_t
+stu_rtmp_connect() {
+	return STU_OK;
+}
+
+stu_int32_t
+stu_rtmp_create_stream() {
+	return STU_OK;
+}
+
+stu_int32_t
+stu_rtmp_call() {
+	return STU_OK;
+}
+
+
+stu_int32_t
 stu_rtmp_on_connect(stu_rtmp_netconnection_t *nc) {
 	stu_rtmp_amf_t *cmd, *tran, *prop, *info, *item;
 	u_char         *pos;
@@ -47,7 +63,6 @@ stu_rtmp_on_connect(stu_rtmp_netconnection_t *nc) {
 	stu_str_set(&key, "data");
 	item = stu_rtmp_amf_duplicate(stu_rtmp_version, TRUE);
 	if (stu_rtmp_amf_set_key(item, key.data, key.len) == STU_ERROR) {
-		stu_rtmp_close_connection(nc->connection);
 		goto done;
 	}
 	stu_rtmp_amf_add_item_to_object(info, item);
@@ -58,7 +73,7 @@ stu_rtmp_on_connect(stu_rtmp_netconnection_t *nc) {
 	pos = stu_rtmp_amf_stringify(pos, info);
 
 	if (stu_rtmp_send_buffer(nc, tmp, pos - tmp) == STU_ERROR) {
-		stu_rtmp_close_connection(nc->connection);
+		goto done;
 	}
 
 done:
@@ -120,16 +135,12 @@ done:
 	pos = stu_rtmp_amf_stringify(pos, null);
 	pos = stu_rtmp_amf_stringify(pos, info);
 
-	if (stu_rtmp_send_buffer(nc, tmp, pos - tmp) == STU_ERROR) {
-		stu_rtmp_close_connection(nc->connection);
-	}
-
 	stu_rtmp_amf_delete(cmd);
 	stu_rtmp_amf_delete(tran);
 	stu_rtmp_amf_delete(null);
 	stu_rtmp_amf_delete(info);
 
-	return STU_OK;
+	return stu_rtmp_send_buffer(nc, tmp, pos - tmp);
 }
 
 stu_int32_t

@@ -10,6 +10,8 @@
 
 #include "stu_rtmp.h"
 
+#define STU_RTMP_STREAM_DATA_FRAMES_SIZE  8
+
 #define STU_RTMP_STREAM_TYPE_IDLE         0x00
 #define STU_RTMP_STREAM_TYPE_PUBLISHING   0x01
 #define STU_RTMP_STREAM_TYPE_PLAYING_LIVE 0x02
@@ -19,7 +21,9 @@ typedef struct {
 	stu_uint32_t              id;
 	stu_str_t                 name;
 	stu_uint8_t               type;
-	stu_hash_t                data_frames;     // *DataMessage.DataMessage
+
+	stu_hash_t                data_frames;     // *stu_rtmp_amf_t
+	stu_rtmp_data_message_t  *metadata;
 	stu_rtmp_audio_message_t *init_audio;
 	stu_rtmp_video_message_t *init_video;
 	stu_double_t              time;            // at when to init
