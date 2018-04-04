@@ -125,7 +125,11 @@ stu_rtmp_amf_create_string(stu_str_t *key, u_char *value, size_t len) {
 	stu_str_t      *str;
 	size_t          size;
 
-	item = stu_rtmp_amf_create(STU_RTMP_AMF_STRING, key);
+	if (len >= 0xFFFF) {
+		return stu_rtmp_amf_create_long_string(key, value, len);
+	}
+
+	item = stu_rtmp_amf_create(len < 0xFFFF ? STU_RTMP_AMF_STRING : STU_RTMP_AMF_LONG_STRING, key);
 	if (item == NULL) {
 		return NULL;
 	}
@@ -727,7 +731,7 @@ stu_rtmp_amf_parse_ecma_array(stu_rtmp_amf_t *array, u_char *data, size_t len, u
 	p = data;
 	cost = 0;
 
-	m = stu_endian_32(*(stu_uint16_t *) p);
+	m = stu_endian_32(*(stu_uint32_t *) p);
 	p += 4;
 	cost += 4;
 
@@ -787,7 +791,7 @@ stu_rtmp_amf_parse_strict_array(stu_rtmp_amf_t *array, u_char *data, size_t len,
 	p = data;
 	cost = 0;
 
-	m = stu_endian_32(*(stu_uint16_t *) p);
+	m = stu_endian_32(*(stu_uint32_t *) p);
 	p += 4;
 	cost += 4;
 
@@ -864,7 +868,7 @@ stu_rtmp_amf_parse_long_string(stu_rtmp_amf_t *item, u_char *data, size_t len, u
 	stu_str_t    *str;
 	stu_uint32_t  cost;
 
-	if (len < 2) {
+	if (len < 4) {
 		stu_log_error(0, "Data not enough while parsing AMF string.");
 		goto failed;
 	}

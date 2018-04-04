@@ -1,12 +1,12 @@
 /*
  * stu_file.h
  *
- *  Created on: 2017年11月15日
+ *  Created on: 2017骞�11鏈�15鏃�
  *      Author: Tony Lau
  */
 
-#ifndef STUDEASE_CN_CORE_STU_FILE_H_
-#define STUDEASE_CN_CORE_STU_FILE_H_
+#ifndef STUDEASE_CN_OS_UNIX_STU_FILE_H_
+#define STUDEASE_CN_OS_UNIX_STU_FILE_H_
 
 #include "../stu_config.h"
 #include "stu_core.h"
@@ -19,14 +19,14 @@ typedef struct stat               stu_file_info_t;
 typedef struct stu_file_s         stu_file_t;
 
 struct stu_file_s {
-	stu_fd_t                       fd;
-	stu_str_t                      name;
-	stu_file_info_t                info;
+	stu_fd_t                      fd;
+	stu_str_t                     name;
+	stu_file_info_t               info;
 
-	void                         (*flush)(stu_file_t *file);
-	void                          *data;
+	void                        (*flush)(stu_file_t *file);
+	void                         *data;
 
-	off_t                          offset;
+	off_t                         offset;
 };
 
 typedef struct {
@@ -73,7 +73,6 @@ typedef struct {
 #define stu_file_delete(name)     unlink((const char *) name)
 #define stu_file_delete_n        "unlink()"
 
-
 ssize_t stu_file_read(stu_file_t *file, u_char *buf, size_t size, off_t offset);
 #if (STU_HAVE_PREAD)
 #define stu_file_read_n          "pread()"
@@ -98,7 +97,6 @@ stu_write_fd(stu_fd_t fd, void *buf, size_t n) {
 
 #define stu_write_fd_n           "write()"
 
-
 #define stu_file_rename(o, n)     rename((const char *) o, (const char *) n)
 #define stu_file_rename_n        "rename()"
 
@@ -121,6 +119,7 @@ stu_int32_t  stu_file_set_time(u_char *name, stu_fd_t fd, time_t s);
 #define stu_is_file(sb)           (S_ISREG((sb)->st_mode))
 #define stu_is_link(sb)           (S_ISLNK((sb)->st_mode))
 #define stu_is_exec(sb)           (((sb)->st_mode & S_IXUSR) == S_IXUSR)
+
 #define stu_file_access(sb)       ((sb)->st_mode & 0777)
 #define stu_file_size(sb)         (sb)->st_size
 #define stu_file_fs_size(sb)      stu_max((sb)->st_size, (sb)->st_blocks * 512)
@@ -138,11 +137,11 @@ stu_int32_t  stu_file_set_time(u_char *name, stu_fd_t fd, time_t s);
 stu_int32_t  stu_dir_open(u_char *name, stu_dir_t *dir);
 #define stu_dir_open_n           "opendir()"
 
-#define stu_dir_close(d)          closedir((d)->dir)
-#define stu_dir_close_n          "closedir()"
-
 stu_int32_t  stu_dir_read(stu_dir_t *dir);
 #define stu_dir_read_n           "readdir()"
+
+#define stu_dir_close(d)          closedir((d)->dir)
+#define stu_dir_close_n          "closedir()"
 
 #define stu_dir_create(name, access) mkdir((const char *) name, access)
 #define stu_dir_create_n         "mkdir()"
@@ -171,6 +170,7 @@ stu_de_info(u_char *name, stu_dir_t *dir) {
 }
 
 #define stu_de_info_n            "stat()"
+
 #define stu_de_link_info(name, dir)  lstat((const char *) name, &(dir)->info)
 #define stu_de_link_info_n       "lstat()"
 
@@ -191,8 +191,8 @@ stu_de_info(u_char *name, stu_dir_t *dir) {
 #else
 
 #define stu_de_is_dir(dir)        (S_ISDIR((dir)->info.st_mode))
-#define stu_de_is_file(dir)        (S_ISREG((dir)->info.st_mode))
-#define stu_de_is_link(dir)      (S_ISLNK((dir)->info.st_mode))
+#define stu_de_is_file(dir)       (S_ISREG((dir)->info.st_mode))
+#define stu_de_is_link(dir)       (S_ISLNK((dir)->info.st_mode))
 
 #endif
 
@@ -214,4 +214,4 @@ stu_int32_t  stu_unlock_fd(stu_fd_t fd);
 
 #define stu_stderr                STDERR_FILENO
 
-#endif /* STUDEASE_CN_CORE_STU_FILE_H_ */
+#endif /* STUDEASE_CN_OS_UNIX_STU_FILE_H_ */

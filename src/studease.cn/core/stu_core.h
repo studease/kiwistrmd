@@ -1,21 +1,23 @@
 /*
  * core.h
  *
- *  Created on: 2017年10月20日
+ *  Created on: 2017骞�10鏈�20鏃�
  *      Author: Tony Lau
  */
 
 #ifndef STUDEASE_CN_CORE_STU_CORE_H_
 #define STUDEASE_CN_CORE_STU_CORE_H_
 
+#if (STU_LINUX)
 #include <arpa/inet.h>
+#endif
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <float.h>
 #include <limits.h>
 #include <math.h>
-#include <net/if.h>
+#include <mswsock.h>
 #include <pthread.h>
 #include <sched.h>
 #include <signal.h>
@@ -25,16 +27,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if (STU_LINUX)
 #include <sys/epoll.h>
 #include <sys/ioctl.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
 #include <sys/socket.h>
+#endif
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
+#if (STU_WIN32)
 #include <unistd.h>
+#include <winsock2.h>
+#endif
 
 #define stu_signal_helper(n)   SIG##n
 #define stu_signal_value(n)    stu_signal_helper(n)
@@ -42,6 +47,9 @@
 #define STU_SHUTDOWN_SIGNAL    QUIT
 #define STU_REOPEN_SIGNAL      USR1
 #define STU_CHANGEBIN_SIGNAL   USR2
+
+#define STU_INT32_LEN         (sizeof("-2147483648") - 1)
+#define STU_INT64_LEN         (sizeof("-9223372036854775808") - 1)
 
 /* Signed.  */
 typedef signed char            stu_int8_t;
@@ -102,20 +110,36 @@ typedef unsigned char          stu_bool_t;
 #define stu_inline             inline
 
 
+typedef struct stu_event_s    stu_event_t;
 typedef struct stu_upstream_s stu_upstream_t;
+
+typedef void (*stu_event_handler_pt)(stu_event_t *ev);
+
 
 #include "stu_string.h"
 #include "stu_queue.h"
-#include "stu_file.h"
+#if (STU_LINUX)
+#include "../os/unix/stu_file.h"
+# else
+#include "../os/win32/stu_file.h"
+# endif
 #include "stu_mutex.h"
 #include "stu_rwlock.h"
 #include "stu_spinlock.h"
 #include "stu_rbtree.h"
 #include "stu_time.h"
-#include "stu_atomic.h"
 #include "stu_log.h"
-#include "stu_errno.h"
-#include "stu_shmem.h"
+#if (STU_LINUX)
+#include "../os/unix/stu_atomic.h"
+#include "../os/unix/stu_errno.h"
+#include "../os/unix/stu_shmem.h"
+#include "../os/unix/stu_os.h"
+# else
+#include "../os/win32/stu_atomic.h"
+#include "../os/win32/stu_errno.h"
+#include "../os/win32/stu_shmem.h"
+#include "../os/win32/stu_os.h"
+# endif
 #include "stu_base64.h"
 #include "stu_sha1.h"
 #include "stu_hmac.h"
@@ -127,16 +151,23 @@ typedef struct stu_upstream_s stu_upstream_t;
 #include "stu_buf.h"
 #include "stu_list.h"
 #include "stu_hash.h"
+#if (STU_LINUX)
+#include "../os/unix/stu_socket.h"
+# else
+#include "../os/win32/stu_socket.h"
+# endif
 #include "stu_inet.h"
-#include "stu_socket.h"
 #include "../event/stu_event.h"
 #include "stu_connection.h"
 #include "stu_upstream.h"
 #include "stu_timer.h"
 #include "stu_mq.h"
 #include "stu_thread.h"
-#include "stu_process.h"
-#include "stu_channel.h"
+#if (STU_LINUX)
+#include "../os/unix/stu_process.h"
+# else
+#include "../os/win32/stu_process.h"
+# endif
 #include "../utils/stu_utils.h"
 
 #endif /* STUDEASE_CN_CORE_STU_CORE_H_ */

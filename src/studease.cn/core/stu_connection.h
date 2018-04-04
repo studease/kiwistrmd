@@ -1,7 +1,7 @@
 /*
  * stu_connection.h
  *
- *  Created on: 2017年11月16日
+ *  Created on: 2017骞�11鏈�16鏃�
  *      Author: Tony Lau
  */
 
@@ -14,22 +14,30 @@
 #define STU_CONNECTION_POOL_DEFAULT_SIZE   4096
 
 typedef struct {
-	stu_mutex_t     lock;
-	stu_pool_t     *pool;
+	stu_mutex_t      lock;
+	stu_pool_t      *pool;
 
-	stu_socket_t    fd;
-	stu_buf_t       buffer;
-	void           *request;
-	void           *data;
-	stu_event_t     read;
-	stu_event_t     write;
-	stu_upstream_t *upstream;
+	stu_socket_t     fd;
+	stu_buf_t        buffer;
 
-	unsigned        idle:1;
-	unsigned        timedout:1;
-	unsigned        error:1;
-	unsigned        close:1;
-	unsigned        destroyed:1;
+	stu_event_t      read;
+	stu_event_t      write;
+	stu_recv_pt      recv;
+	stu_send_pt      send;
+
+	void            *request;
+	void            *data;
+	stu_upstream_t  *upstream;
+
+	struct sockaddr *sockaddr;
+	socklen_t        socklen;
+	stu_str_t        addr_text;
+
+	unsigned         idle:1;
+	unsigned         timedout:1;
+	unsigned         error:1;
+	unsigned         close:1;
+	unsigned         destroyed:1;
 } stu_connection_t;
 
 stu_connection_t *stu_connection_get(stu_socket_t s);

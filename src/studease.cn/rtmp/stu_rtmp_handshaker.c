@@ -1,7 +1,7 @@
 /*
- * stu_rtmp_handshake.c
+ * stu_rtmp_handshaker.c
  *
- *  Created on: 2018年1月12日
+ *  Created on: 2018骞�1鏈�12鏃�
  *      Author: Tony Lau
  */
 
@@ -33,8 +33,8 @@ static const u_char  STU_RTMP_FMS_KEY[] = {
 	0x93, 0xB8, 0xE6, 0x36, 0xCF, 0xEB, 0x31, 0xAE
 };
 
-static void         stu_rtmp_process_handshake(stu_event_t *ev);
-static ssize_t      stu_rtmp_read_handshake(stu_rtmp_handshake_t *h);
+static void         stu_rtmp_process_handshaker(stu_event_t *ev);
+static ssize_t      stu_rtmp_read_handshaker(stu_rtmp_handshaker_t *h);
 
 static stu_int32_t  stu_rtmp_validate_client(u_char *c1, u_char **digest, u_char **challenge, stu_uint8_t *scheme);
 static stu_int32_t  stu_rtmp_validate_scheme(u_char *c1, u_char **digest, u_char **challenge, stu_uint8_t scheme);
@@ -45,7 +45,7 @@ static u_char *     stu_rtmp_make_digest(u_char *dst, stu_buf_t *src, const u_ch
 
 
 void
-stu_rtmp_handshake_read_handler(stu_event_t *ev) {
+stu_rtmp_handshaker_read_handler(stu_event_t *ev) {
 	stu_connection_t *c;
 	stu_int32_t       n, err;
 
@@ -54,10 +54,10 @@ stu_rtmp_handshake_read_handler(stu_event_t *ev) {
 	//stu_mutex_lock(&c->lock);
 
 	if (c->buffer.start == NULL) {
-		c->buffer.start = (u_char *) stu_pcalloc(c->pool, STU_RTMP_HANDSHAKE_BUFFER_SIZE);
+		c->buffer.start = (u_char *) stu_pcalloc(c->pool, STU_RTMP_HANDSHAKER_BUFFER_SIZE);
 		c->buffer.pos = c->buffer.last = c->buffer.start;
-		c->buffer.end = c->buffer.start + STU_RTMP_HANDSHAKE_BUFFER_SIZE;
-		c->buffer.size = STU_RTMP_HANDSHAKE_BUFFER_SIZE;
+		c->buffer.end = c->buffer.start + STU_RTMP_HANDSHAKER_BUFFER_SIZE;
+		c->buffer.size = STU_RTMP_HANDSHAKER_BUFFER_SIZE;
 	}
 	c->buffer.pos = c->buffer.last = c->buffer.start;
 	stu_memzero(c->buffer.start, c->buffer.size);
@@ -107,8 +107,8 @@ again:
 		goto failed;
 	}
 
-	//ev->handler = stu_rtmp_process_handshake;
-	stu_rtmp_process_handshake(ev);
+	//ev->handler = stu_rtmp_process_handshaker;
+	stu_rtmp_process_handshaker(ev);
 
 	goto done;
 
@@ -118,17 +118,17 @@ failed:
 
 done:
 
-	return;
-
 	//stu_mutex_unlock(&c->lock);
+
+	return;
 }
 
-stu_rtmp_handshake_t *
-stu_rtmp_create_handshake(stu_connection_t *c) {
-	stu_rtmp_handshake_t *h;
+stu_rtmp_handshaker_t *
+stu_rtmp_create_handshaker(stu_connection_t *c) {
+	stu_rtmp_handshaker_t *h;
 
 	if (c->request == NULL) {
-		h = stu_pcalloc(c->pool, sizeof(stu_rtmp_handshake_t));
+		h = stu_pcalloc(c->pool, sizeof(stu_rtmp_handshaker_t));
 		if (h == NULL) {
 			stu_log_error(0, "Failed to create rtmp handshake.");
 			return NULL;
@@ -143,9 +143,9 @@ stu_rtmp_create_handshake(stu_connection_t *c) {
 }
 
 static void
-stu_rtmp_process_handshake(stu_event_t *ev) {
+stu_rtmp_process_handshaker(stu_event_t *ev) {
 	stu_connection_t      *c;
-	stu_rtmp_handshake_t *h;
+	stu_rtmp_handshaker_t *h;
 	stu_int32_t            rc;
 	ssize_t                n;
 
@@ -167,7 +167,7 @@ stu_rtmp_process_handshake(stu_event_t *ev) {
 
 	for ( ;; ) {
 		if (rc == STU_AGAIN) {
-			n = stu_rtmp_read_handshake(h);
+			n = stu_rtmp_read_handshaker(h);
 			if (n == STU_AGAIN || n == STU_ERROR) {
 				stu_log_error(0, "rtmp failed to read handshake buffer.");
 				stu_rtmp_finalize_handshake(h, STU_ERROR);
@@ -188,7 +188,7 @@ stu_rtmp_process_handshake(stu_event_t *ev) {
 }
 
 static ssize_t
-stu_rtmp_read_handshake(stu_rtmp_handshake_t *h) {
+stu_rtmp_read_handshaker(stu_rtmp_handshaker_t *h) {
 	stu_connection_t *c;
 	ssize_t           n;
 	stu_int32_t       err;
@@ -232,7 +232,7 @@ again:
 }
 
 void
-stu_rtmp_finalize_handshake(stu_rtmp_handshake_t *h, stu_int32_t rc) {
+stu_rtmp_finalize_handshaker(stu_rtmp_handshaker_t *h, stu_int32_t rc) {
 	stu_connection_t *c;
 	u_char           *digest, *challenge;
 	u_char            buf[3073];
@@ -263,7 +263,7 @@ stu_rtmp_finalize_handshake(stu_rtmp_handshake_t *h, stu_int32_t rc) {
 		*(stu_uint32_t *) b.last = 0;
 		b.last += 4;
 
-		*(stu_uint32_t *) b.last = h->zero ? STU_RTMP_HANDSHAKE_VERSION : 0;
+		*(stu_uint32_t *) b.last = h->zero ? STU_RTMP_HANDSHAKER_VERSION : 0;
 		b.last += 4;
 
 		if (h->zero) {
@@ -276,7 +276,7 @@ stu_rtmp_finalize_handshake(stu_rtmp_handshake_t *h, stu_int32_t rc) {
 			off = stu_rtmp_find_digest(b.pos, scheme);
 
 			t.last = stu_memcpy(t.pos, b.start, off);
-			t.last = stu_memcpy(t.last, b.start + off + STU_RTMP_HANDSHAKE_DIGEST_SIZE, 1504 - off);
+			t.last = stu_memcpy(t.last, b.start + off + STU_RTMP_HANDSHAKER_DIGEST_SIZE, 1504 - off);
 
 			b.last = stu_rtmp_make_digest(b.last, &t, STU_RTMP_FMS_KEY, 36);
 			if (b.last == NULL) {
@@ -284,7 +284,7 @@ stu_rtmp_finalize_handshake(stu_rtmp_handshake_t *h, stu_int32_t rc) {
 				goto failed;
 			}
 		} else {
-			b.last = stu_rtmp_fill_random_buffer(b.last, STU_RTMP_HANDSHAKE_RANDOM_SIZE);
+			b.last = stu_rtmp_fill_random_buffer(b.last, STU_RTMP_HANDSHAKER_RANDOM_SIZE);
 		}
 
 		// s2
@@ -294,18 +294,18 @@ stu_rtmp_finalize_handshake(stu_rtmp_handshake_t *h, stu_int32_t rc) {
 			b.last = stu_rtmp_fill_random_buffer(b.last, 1504);
 
 			d.pos = d.last = digest;
-			d.last += STU_RTMP_HANDSHAKE_DIGEST_SIZE;
+			d.last += STU_RTMP_HANDSHAKER_DIGEST_SIZE;
 
 			t.last = stu_rtmp_make_digest(t.pos, &d, STU_RTMP_FMS_KEY, 68);
 			b.last = stu_rtmp_make_digest(b.last, &b, (const u_char *) t.pos, t.last - t.pos);
 		} else {
-			b.last = stu_memcpy(b.last, h->start, STU_RTMP_HANDSHAKE_PACKET_SIZE);
+			b.last = stu_memcpy(b.last, h->start, STU_RTMP_HANDSHAKER_PACKET_SIZE);
 		}
 
 		// send s0 & s1 & s2
 		n = send(c->fd, b.start, b.size, 0);
 		if (n == -1) {
-			stu_log_error(stu_errno, "Failed to send rtmp handshake packet c0 & c1.");
+			stu_log_error(stu_errno, "Failed to send rtmp handshake packet s0 & s1 & s2.");
 			goto failed;
 		}
 
@@ -348,13 +348,13 @@ failed:
 
 static stu_int32_t
 stu_rtmp_validate_client(u_char *c1, u_char **digest, u_char **challenge, stu_uint8_t *scheme) {
-	if (stu_rtmp_validate_scheme(c1, digest, challenge, STU_RTMP_HANDSHAKE_SCHEME1) == STU_OK) {
-		*scheme = STU_RTMP_HANDSHAKE_SCHEME1;
+	if (stu_rtmp_validate_scheme(c1, digest, challenge, STU_RTMP_HANDSHAKER_SCHEME1) == STU_OK) {
+		*scheme = STU_RTMP_HANDSHAKER_SCHEME1;
 		return STU_OK;
 	}
 
-	if (stu_rtmp_validate_scheme(c1, digest, challenge, STU_RTMP_HANDSHAKE_SCHEME2) == STU_OK) {
-		*scheme = STU_RTMP_HANDSHAKE_SCHEME2;
+	if (stu_rtmp_validate_scheme(c1, digest, challenge, STU_RTMP_HANDSHAKER_SCHEME2) == STU_OK) {
+		*scheme = STU_RTMP_HANDSHAKER_SCHEME2;
 		return STU_OK;
 	}
 
@@ -364,7 +364,7 @@ stu_rtmp_validate_client(u_char *c1, u_char **digest, u_char **challenge, stu_ui
 static stu_int32_t
 stu_rtmp_validate_scheme(u_char *c1, u_char **digest, u_char **challenge, stu_uint8_t scheme) {
 	u_char       tmp[1504];
-	u_char       dgt[STU_RTMP_HANDSHAKE_DIGEST_SIZE];
+	u_char       dgt[STU_RTMP_HANDSHAKER_DIGEST_SIZE];
 	stu_buf_t    t;
 	stu_int32_t  off;
 
@@ -378,11 +378,11 @@ stu_rtmp_validate_scheme(u_char *c1, u_char **digest, u_char **challenge, stu_ui
 	*digest = c1 + off;
 
 	t.last = stu_memcpy(t.pos, c1, off);
-	t.last = stu_memcpy(t.last, c1 + off + STU_RTMP_HANDSHAKE_DIGEST_SIZE, 1504 - off);
+	t.last = stu_memcpy(t.last, c1 + off + STU_RTMP_HANDSHAKER_DIGEST_SIZE, 1504 - off);
 
 	stu_rtmp_make_digest(dgt, &t, STU_RTMP_FP_KEY, 30);
 
-	if (stu_strncmp(dgt, *digest, STU_RTMP_HANDSHAKE_DIGEST_SIZE) != 0) {
+	if (stu_strncmp(dgt, *digest, STU_RTMP_HANDSHAKER_DIGEST_SIZE) != 0) {
 		return STU_ERROR;
 	}
 
@@ -418,7 +418,7 @@ stu_rtmp_find_digest(u_char *src, stu_uint8_t scheme) {
 	}
 
 	off = n + 4 + (off % 728);
-	if (off + STU_RTMP_HANDSHAKE_DIGEST_SIZE > STU_RTMP_HANDSHAKE_PACKET_SIZE) {
+	if (off + STU_RTMP_HANDSHAKER_DIGEST_SIZE > STU_RTMP_HANDSHAKER_PACKET_SIZE) {
 		stu_log_error(0, "rtmp digest out of range: %d.", off);
 		return STU_ERROR;
 	}
@@ -442,7 +442,7 @@ stu_rtmp_find_challenge(u_char *src, stu_uint8_t scheme) {
 		off += 764;
 	}
 
-	if (off + STU_RTMP_HANDSHAKE_CHALLENGE_SIZE > STU_RTMP_HANDSHAKE_PACKET_SIZE) {
+	if (off + STU_RTMP_HANDSHAKER_CHALLENGE_SIZE > STU_RTMP_HANDSHAKER_PACKET_SIZE) {
 		stu_log_error(0, "rtmp challenge out of range: %d.", off);
 		return STU_ERROR;
 	}
@@ -468,16 +468,16 @@ stu_rtmp_make_digest(u_char *dst, stu_buf_t *src, const u_char *key, size_t len)
 
 
 void
-stu_rtmp_free_handshake(stu_rtmp_handshake_t *h) {
+stu_rtmp_free_handshaker(stu_rtmp_handshaker_t *h) {
 	h->connection->request = NULL;
 }
 
 void
-stu_rtmp_close_handshake(stu_rtmp_handshake_t *h) {
+stu_rtmp_close_handshaker(stu_rtmp_handshaker_t *h) {
 	stu_connection_t *c;
 
 	c = h->connection;
 
-	stu_rtmp_free_handshake(h);
+	stu_rtmp_free_handshaker(h);
 	stu_rtmp_close_connection(c);
 }

@@ -20,7 +20,7 @@
 
 #define STU_TIME_SLOTS   64
 
-static stu_uint32_t        slot;
+static stu_uint32_t      slot;
 static stu_mutex_t       stu_time_lock;
 
 volatile stu_msec_t      stu_current_msec;

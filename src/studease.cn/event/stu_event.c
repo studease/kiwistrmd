@@ -1,12 +1,11 @@
 /*
  * stu_event.c
  *
- *  Created on: 2017年11月16日
+ *  Created on: 2017骞�11鏈�16鏃�
  *      Author: Tony Lau
  */
 
-#include "../stu_config.h"
-#include "../core/stu_core.h"
+#include "stu_event.h"
 
 stu_event_actions_t  stu_event_actions;
 
@@ -36,7 +35,7 @@ stu_event_init() {
 }
 
 void
-stu_event_process_events_and_timers(stu_fd_t epfd) {
+stu_event_process_events_and_timers(stu_fd_t evfd) {
 	stu_uint8_t  flags;
 	stu_msec_t   timer, delta;
 
@@ -52,7 +51,7 @@ stu_event_process_events_and_timers(stu_fd_t epfd) {
 	flags = STU_EVENT_FLAGS_UPDATE_TIME;
 
 	delta = stu_current_msec;
-	(void) stu_event_process_events(epfd, timer, flags);
+	(void) stu_event_process_events(evfd, timer, flags);
 	delta = stu_current_msec - delta;
 
 	stu_log_debug(2, "timer delta: %lu.", delta);

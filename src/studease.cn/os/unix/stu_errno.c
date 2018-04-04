@@ -1,7 +1,7 @@
 /*
  * stu_errno.c
  *
- *  Created on: 2017年11月15日
+ *  Created on: 2017骞�11鏈�15鏃�
  *      Author: Tony Lau
  */
 

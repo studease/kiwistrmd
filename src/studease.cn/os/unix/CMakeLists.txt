@@ -1,0 +1,5 @@
+#unix files
+AUX_SOURCE_DIRECTORY(. DIR_STU_UNIX_SRC)
+
+#build unix
+ADD_LIBRARY(unix ${DIR_STU_UNIX_SRC})

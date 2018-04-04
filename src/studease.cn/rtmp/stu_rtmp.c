@@ -1,7 +1,7 @@
 /*
  * stu_rtmp.c
  *
- *  Created on: 2018年1月12日
+ *  Created on: 2018骞�1鏈�12鏃�
  *      Author: Tony Lau
  */
 
@@ -17,9 +17,8 @@ stu_rtmp_amf_t      *stu_rtmp_version;
 extern stu_thread_t  stu_threads[STU_THREAD_MAXIMUM];
 extern stu_int32_t   stu_thread_n;
 
-static stu_int32_t   stu_rtmp_thread_n = -1;
-
 static stu_socket_t  stu_rtmpfd;
+static stu_int32_t   stu_rtmp_thread_n = -1;
 
 static void  stu_rtmp_handler(stu_event_t *ev);
 
@@ -76,7 +75,7 @@ stu_rtmp_init() {
 }
 
 stu_int32_t
-stu_rtmp_listen(stu_fd_t epfd, uint16_t port) {
+stu_rtmp_listen(stu_fd_t evfd, uint16_t port) {
 	stu_connection_t   *c;
 	int                 optval;
 	socklen_t           optlen;
@@ -84,11 +83,12 @@ stu_rtmp_listen(stu_fd_t epfd, uint16_t port) {
 
 	optlen = sizeof(optval);
 
-	stu_rtmpfd = socket(AF_INET, SOCK_STREAM, 0);
+	stu_rtmpfd = stu_socket(AF_INET, SOCK_STREAM, 0);
 	if (stu_rtmpfd == -1) {
 		stu_log_error(stu_errno, "Failed to create rtmp server fd.");
 		return STU_ERROR;
 	}
+
 
 	optval = 1;
 	if (setsockopt(stu_rtmpfd, SOL_SOCKET, SO_REUSEADDR, (void *) &optval, optlen) == -1) {
@@ -96,11 +96,14 @@ stu_rtmp_listen(stu_fd_t epfd, uint16_t port) {
 		return STU_ERROR;
 	}
 
+#if (STU_LINUX)
+
 	if (setsockopt(stu_rtmpfd, SOL_SOCKET, SO_REUSEPORT, (void *) &optval, optlen) == -1) {
 		stu_log_error(stu_errno, "setsockopt(SO_REUSEPORT) failed while setting rtmp server fd.");
 		return STU_ERROR;
 	}
 
+# endif
 /*
 	if (getsockopt(stu_rtmpfd, SOL_SOCKET, SO_SNDBUF, (void *) &optval, &optlen) == -1) {
 		stu_log_error(stu_errno, "getsockopt(SO_SNDBUF) failed while setting rtmp server fd.");
@@ -129,7 +132,7 @@ stu_rtmp_listen(stu_fd_t epfd, uint16_t port) {
 		return STU_ERROR;
 	}
 
-	c->read.epfd = epfd;
+	c->read.evfd = evfd;
 	c->read.handler = stu_rtmp_handler;
 
 	if (stu_event_add(&c->read, STU_READ_EVENT, 0) == STU_ERROR) {
@@ -170,7 +173,7 @@ stu_rtmp_handler(stu_event_t *ev) {
 
 again:
 
-	fd = accept(stu_rtmpfd, (struct sockaddr*)&sa, &socklen);
+	fd = accept(stu_rtmpfd, (struct sockaddr*) &sa, &socklen);
 	if (fd == -1) {
 		err = stu_errno;
 		if (err == EAGAIN) {
@@ -202,10 +205,12 @@ again:
 		stu_rtmp_thread_n = 0;
 	}
 
-	c->read.epfd = stu_threads[stu_rtmp_thread_n].epfd;
-	c->write.epfd = stu_threads[stu_rtmp_thread_n].epfd;
+	c->read.evfd = stu_threads[stu_rtmp_thread_n].evfd;
+	c->write.evfd = stu_threads[stu_rtmp_thread_n].evfd;
+	c->recv = stu_os_io.recv;
+	c->send = stu_os_io.send;
 
-	c->read.handler = stu_rtmp_handshake_read_handler;
+	c->read.handler = stu_rtmp_handshaker_read_handler;
 
 	if (stu_event_add(&c->read, STU_READ_EVENT, STU_CLEAR_EVENT) == STU_ERROR) {
 		stu_log_error(0, "Failed to add rtmp handshaker read event.");

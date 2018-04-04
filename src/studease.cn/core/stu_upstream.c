@@ -1,7 +1,7 @@
 /*
  * stu_upstream.c
  *
- *  Created on: 2017年11月20日
+ *  Created on: 2017骞�11鏈�20鏃�
  *      Author: Tony Lau
  */
 
@@ -226,7 +226,7 @@ stu_upstream_init(stu_connection_t *c, stu_upstream_server_t *s) {
 	}
 
 	if (pc->fd == STU_SOCKET_INVALID) {
-		fd = socket(s->addr.sockaddr.sin_family, SOCK_STREAM, 0);
+		fd = stu_socket(s->addr.sockaddr.sin_family, SOCK_STREAM, 0);
 		if (fd == (stu_socket_t) STU_SOCKET_INVALID) {
 			stu_log_error(stu_errno, "Failed to create socket for upstream %s, fd=%d.", s->name.data, c->fd);
 			return STU_ERROR;
@@ -238,8 +238,8 @@ stu_upstream_init(stu_connection_t *c, stu_upstream_server_t *s) {
 		}
 
 		pc->fd = fd;
-		pc->read.epfd = c->read.epfd;
-		pc->write.epfd = c->write.epfd;
+		pc->read.evfd = c->read.evfd;
+		pc->write.evfd = c->write.evfd;
 
 		if (stu_event_add(&pc->read, STU_READ_EVENT, STU_CLEAR_EVENT) == STU_ERROR) {
 			stu_log_error(0, "Failed to add read event of upstream %s, fd=%d.", s->name.data, c->fd);
@@ -273,25 +273,25 @@ stu_upstream_connect(stu_connection_t *pc) {
 	rc = connect(pc->fd, (struct sockaddr *) &s->addr.sockaddr, s->addr.socklen);
 	if (rc == -1) {
 		err = stu_errno;
-		if (err != EINPROGRESS
+		if (err != STU_EINPROGRESS
 #if (STU_WIN32)
-				/* Winsock returns WSAEWOULDBLOCK (NGX_EAGAIN) */
-				&& err != EAGAIN
+				/* Winsock returns WSAEWOULDBLOCK (STU_EAGAIN) */
+				&& err != STU_EAGAIN
 #endif
 				) {
-			if (err == ECONNREFUSED
+			if (err == STU_ECONNREFUSED
 #if (STU_LINUX)
 					/*
 					 * Linux returns EAGAIN instead of ECONNREFUSED
 					 * for unix sockets if listen queue is full
 					 */
-					|| err == EAGAIN
+					|| err == STU_EAGAIN
 #endif
-					|| err == ECONNRESET
-					|| err == ENETDOWN
-					|| err == ENETUNREACH
-					|| err == EHOSTDOWN
-					|| err == EHOSTUNREACH) {
+					|| err == STU_ECONNRESET
+					|| err == STU_ENETDOWN
+					|| err == STU_ENETUNREACH
+					|| err == STU_EHOSTDOWN
+					|| err == STU_EHOSTUNREACH) {
 
 			} else {
 

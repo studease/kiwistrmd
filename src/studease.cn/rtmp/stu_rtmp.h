@@ -1,7 +1,7 @@
 /*
  * stu_rtmp.h
  *
- *  Created on: 2018年1月12日
+ *  Created on: 2018骞�1鏈�12鏃�
  *      Author: Tony Lau
  */
 
@@ -20,8 +20,8 @@ typedef struct stu_rtmp_filter_s      stu_rtmp_filter_t;
 typedef struct stu_rtmp_phase_s       stu_rtmp_phase_t;
 typedef struct stu_rtmp_upstream_s    stu_rtmp_upstream_t;
 
+#include "stu_rtmp_handshaker.h"
 #include "stu_rtmp_amf.h"
-#include "stu_rtmp_handshake.h"
 #include "stu_rtmp_chunk.h"
 #include "stu_rtmp_message.h"
 #include "stu_rtmp_netconnection.h"
@@ -36,6 +36,6 @@ typedef struct stu_rtmp_upstream_s    stu_rtmp_upstream_t;
 #include "stu_rtmp_upstream.h"
 
 stu_int32_t  stu_rtmp_init();
-stu_int32_t  stu_rtmp_listen(stu_fd_t epfd, uint16_t port);
+stu_int32_t  stu_rtmp_listen(stu_fd_t evfd, uint16_t port);
 
 #endif /* STUDEASE_CN_RTMP_STU_RTMP_H_ */

@@ -1,7 +1,7 @@
 /*
  * stu_rtmp_netconnection.c
  *
- *  Created on: 2018年1月16日
+ *  Created on: 2018骞�1鏈�16鏃�
  *      Author: Tony Lau
  */
 
@@ -151,32 +151,6 @@ stu_rtmp_on_result(stu_rtmp_netconnection_t *nc) {
 stu_int32_t
 stu_rtmp_on_error(stu_rtmp_netconnection_t *nc) {
 	return STU_OK;
-}
-
-
-stu_int32_t
-stu_rtmp_send_buffer(stu_rtmp_netconnection_t *nc, u_char *data, size_t len) {
-	stu_rtmp_request_t *r;
-	stu_rtmp_chunk_t    ck;
-
-	r = nc->connection->request;
-
-	ck.basic.fmt = 0;
-	ck.basic.csid = r->chunk_in->basic.csid;
-
-	ck.header.timestamp = r->chunk_in->header.timestamp;
-	ck.header.message_len = len;
-	ck.header.type = r->chunk_in->header.type;
-	ck.header.stream_id = r->chunk_in->header.stream_id;
-
-	ck.extended = r->chunk_in->extended;
-
-	ck.payload.start = data;
-	ck.payload.pos = ck.payload.last = ck.payload.start;
-	ck.payload.end = data + len;
-	ck.payload.size = len;
-
-	return stu_rtmp_write_by_chunk(r, &ck);
 }
 
 
@@ -332,7 +306,7 @@ stu_rtmp_set_ack_window_size(stu_rtmp_netconnection_t *nc, stu_uint32_t size) {
 	r = nc->connection->request;
 
 	pos = tmp;
-	stu_memzero(tmp, 10);
+	stu_memzero(tmp, 4);
 
 	*(stu_uint32_t *) pos = stu_endian_32(size);
 	pos += 4;
@@ -407,6 +381,31 @@ stu_rtmp_set_peer_bandwidth(stu_rtmp_netconnection_t *nc, stu_uint32_t bandwidth
 	return STU_OK;
 }
 
+
+stu_int32_t
+stu_rtmp_send_buffer(stu_rtmp_netconnection_t *nc, u_char *data, size_t len) {
+	stu_rtmp_request_t *r;
+	stu_rtmp_chunk_t    ck;
+
+	r = nc->connection->request;
+
+	ck.basic.fmt = 0;
+	ck.basic.csid = r->chunk_in->basic.csid;
+
+	ck.header.timestamp = r->chunk_in->header.timestamp;
+	ck.header.message_len = len;
+	ck.header.type = r->chunk_in->header.type;
+	ck.header.stream_id = r->chunk_in->header.stream_id;
+
+	ck.extended = r->chunk_in->extended;
+
+	ck.payload.start = data;
+	ck.payload.pos = ck.payload.last = ck.payload.start;
+	ck.payload.end = data + len;
+	ck.payload.size = len;
+
+	return stu_rtmp_write_by_chunk(r, &ck);
+}
 
 stu_rtmp_amf_t *
 stu_rtmp_get_information(stu_str_t *level, stu_str_t *code, const char *description) {

@@ -1,12 +1,11 @@
 /*
  * stu_event_epoll.c
  *
- *  Created on: 2017年11月16日
+ *  Created on: 2017骞�11鏈�16鏃�
  *      Author: Tony Lau
  */
 
-#include "../stu_config.h"
-#include "../core/stu_core.h"
+#include "stu_event.h"
 
 
 stu_fd_t
@@ -59,7 +58,7 @@ stu_event_epoll_add(stu_event_t *ev, uint32_t event, stu_uint32_t flags) {
 
 	stu_log_debug(2, "epoll add event: fd=%d, op=%d, ev=%X.", c->fd, op, ee.events);
 
-	if (epoll_ctl(ev->epfd, op, c->fd, &ee) == -1) {
+	if (epoll_ctl(ev->evfd, op, c->fd, &ee) == -1) {
 		stu_log_error(stu_errno, "epoll_ctl(%d, %d) failed", op, c->fd);
 		return STU_ERROR;
 	}
@@ -109,7 +108,7 @@ stu_event_epoll_del(stu_event_t *ev, uint32_t event, stu_uint32_t flags) {
 
 	stu_log_debug(2, "epoll del event: fd=%d, op=%d, ev=%X.", c->fd, op, ee.events);
 
-	if (epoll_ctl(ev->epfd, op, c->fd, &ee) == -1) {
+	if (epoll_ctl(ev->evfd, op, c->fd, &ee) == -1) {
 		stu_log_error(stu_errno, "epoll_ctl(%d, %d) failed", op, c->fd);
 		return STU_ERROR;
 	}
@@ -120,12 +119,12 @@ stu_event_epoll_del(stu_event_t *ev, uint32_t event, stu_uint32_t flags) {
 }
 
 stu_int32_t
-stu_event_epoll_process_events(stu_fd_t epfd, stu_msec_t timer, stu_uint32_t flags) {
+stu_event_epoll_process_events(stu_fd_t evfd, stu_msec_t timer, stu_uint32_t flags) {
 	stu_connection_t   *c;
 	struct epoll_event *ev, events[STU_EPOLL_EVENTS];
 	stu_int32_t         nev, i;
 
-	nev = epoll_wait(epfd, events, STU_EPOLL_EVENTS, timer);
+	nev = epoll_wait(evfd, events, STU_EPOLL_EVENTS, timer);
 
 	if (flags & STU_EVENT_FLAGS_UPDATE_TIME) {
 		stu_time_update();

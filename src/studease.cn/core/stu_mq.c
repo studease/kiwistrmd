@@ -1,7 +1,7 @@
 /*
  * stu_mq.c
  *
- *  Created on: 2017年12月29日
+ *  Created on: 2017骞�12鏈�29鏃�
  *      Author: Tony Lau
  */
 
@@ -278,7 +278,11 @@ stu_mq_get_locked(stu_str_t *name, stu_uint8_t mode, size_t size) {
 			goto failed;
 		}
 
+#if (STU_LINUX)
 		mq->file.offset = mq->file.info.st_size;
+# else
+		mq->file.offset = mq->file.info.nFileIndexLow;
+#endif
 		mq->destroyed = FALSE;
 
 		stu_mq_create_page(mq, mq->file.offset, TRUE);

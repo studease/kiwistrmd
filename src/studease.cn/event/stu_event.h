@@ -1,7 +1,7 @@
 /*
  * stu_event.h
  *
- *  Created on: 2017年10月23日
+ *  Created on: 2017骞�10鏈�23鏃�
  *      Author: Tony Lau
  */
 
@@ -13,6 +13,75 @@
 
 #define STU_EVENT_FLAGS_NONE         0x00
 #define STU_EVENT_FLAGS_UPDATE_TIME  0x01
+
+struct stu_event_s {
+	unsigned              active:1;
+	/* the ready event; in aio mode 0 means that no operation can be posted */
+	unsigned              ready:1;
+	/* aio operation is complete */
+	unsigned              complete:1;
+    unsigned              eof:1;
+    unsigned              error:1;
+	unsigned              timedout:1;
+	unsigned              timer_set:1;
+	unsigned              cancelable:1;
+
+#if (STU_WIN32)
+	/* setsockopt(SO_UPDATE_ACCEPT_CONTEXT) was successful */
+	unsigned              accept_context_updated:1;
+#endif
+
+#if (STU_HAVE_KQUEUE)
+	unsigned              kq_vnode:1;
+
+	/* the pending errno reported by kqueue */
+	int                   kq_errno;
+#endif
+
+#if (STU_HAVE_KQUEUE) || (STU_HAVE_IOCP)
+	int                   available;
+#else
+	unsigned              available:1;
+#endif
+
+#if (STU_HAVE_IOCP)
+	stu_event_ovlp_t      ovlp;
+#endif
+
+	stu_fd_t              evfd;
+	void                 *data;
+	stu_event_handler_pt  handler;
+
+	stu_rbtree_node_t     timer;
+	stu_uint32_t          fails;
+};
+
+#if (STU_HAVE_IOCP)
+
+typedef struct {
+    WSAOVERLAPPED         ovlp;
+    stu_event_t          *event;
+    int                   error;
+} stu_event_ovlp_t;
+
+#endif
+
+typedef struct {
+	stu_int32_t         (*create)();
+
+	stu_int32_t         (*add)(stu_event_t *ev, uint32_t event, stu_uint32_t flags);
+	stu_int32_t         (*del)(stu_event_t *ev, uint32_t event, stu_uint32_t flags);
+
+	stu_int32_t         (*process_events)(stu_fd_t evfd, stu_msec_t timer, stu_uint32_t flags);
+} stu_event_actions_t;
+
+extern stu_event_actions_t        stu_event_actions;
+
+#define stu_event_create          stu_event_actions.create
+#define stu_event_add             stu_event_actions.add
+#define stu_event_del             stu_event_actions.del
+#define stu_event_process_events  stu_event_actions.process_events
+
 
 /*
  * The event filter is deleted just before the closing file.
@@ -80,76 +149,27 @@
 
 #define STU_CLEAR_EVENT    EPOLLET
 
-#endif
+#elif (STU_HAVE_IOCP)
 
-#if (STU_HAVE_IOCP)
+#define STU_READ_EVENT     0
+#define STU_WRITE_EVENT    0
+
 #define STU_IOCP_ACCEPT    0
 #define STU_IOCP_IO        1
 #define STU_IOCP_CONNECT   2
-#endif
-
-
-typedef struct stu_event_s  stu_event_t;
-typedef void (*stu_event_handler_pt)(stu_event_t *ev);
-
-struct stu_event_s {
-	unsigned              active:1;
-	unsigned              timedout:1;
-	unsigned              timer_set:1;
-	unsigned              cancelable:1;
-
-#if (STU_WIN32)
-	/* setsockopt(SO_UPDATE_ACCEPT_CONTEXT) was successful */
-	unsigned              accept_context_updated:1;
-#endif
-
-#if (STU_HAVE_KQUEUE)
-	unsigned              kq_vnode:1;
-
-	/* the pending errno reported by kqueue */
-	int                   kq_errno;
-#endif
-
-#if (STU_HAVE_IOCP)
-	stu_event_ovlp_t      ovlp;
-#endif
-
-	stu_fd_t              epfd;
-	void                 *data;
-	stu_event_handler_pt  handler;
-
-	stu_rbtree_node_t     timer;
-	stu_uint32_t          fails;
-};
-
-#if (STU_HAVE_IOCP)
-
-typedef struct {
-    WSAOVERLAPPED        ovlp;
-    stu_event_t         *event;
-    int                  error;
-} stu_event_ovlp_t;
 
 #endif
 
-typedef struct {
-	stu_int32_t         (*create)();
+#ifndef STU_CLEAR_EVENT
+#define STU_CLEAR_EVENT    0    /* dummy declaration */
+#endif
 
-	stu_int32_t         (*add)(stu_event_t *ev, uint32_t event, stu_uint32_t flags);
-	stu_int32_t         (*del)(stu_event_t *ev, uint32_t event, stu_uint32_t flags);
+#define STU_UPDATE_TIME    1
+#define STU_POST_EVENTS    2
 
-	stu_int32_t         (*process_events)(stu_fd_t epfd, stu_msec_t timer, stu_uint32_t flags);
-} stu_event_actions_t;
-
-extern stu_event_actions_t  stu_event_actions;
-
-#define stu_event_create          stu_event_actions.create
-#define stu_event_add             stu_event_actions.add
-#define stu_event_del             stu_event_actions.del
-#define stu_event_process_events  stu_event_actions.process_events
 
 stu_int32_t  stu_event_init();
-void         stu_event_process_events_and_timers(stu_fd_t epfd);
+void         stu_event_process_events_and_timers(stu_fd_t evfd);
 
 
 #if (STU_WIN32)
