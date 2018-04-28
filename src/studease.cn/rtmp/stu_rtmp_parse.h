@@ -1,7 +1,7 @@
 /*
  * stu_rtmp_parse.h
  *
- *  Created on: 2018年1月16日
+ *  Created on: 2018骞�1鏈�16鏃�
  *      Author: Tony Lau
  */
 
@@ -10,14 +10,8 @@
 
 #include "stu_rtmp.h"
 
-#define STU_RTMP_URL_FLAG_PROTOCOL 0x01
-#define STU_RTMP_URL_FLAG_HOST     0x02
-#define STU_RTMP_URL_FLAG_PORT     0x04
-#define STU_RTMP_URL_FLAG_APP      0x08
-#define STU_RTMP_URL_FLAG_INST     0x10
-
-stu_int32_t  stu_rtmp_parse_handshake(stu_rtmp_handshake_t *h, stu_buf_t *b);
-stu_int32_t  stu_rtmp_parse_chunk(stu_rtmp_request_t *r, stu_buf_t *b);
-stu_int32_t  stu_rtmp_parse_url(stu_str_t *url, stu_str_t *dst, stu_uint8_t flag);
+stu_int32_t  stu_rtmp_parse_handshaker(stu_rtmp_handshaker_t *h, stu_buf_t *src);
+stu_int32_t  stu_rtmp_parse_chunk(stu_rtmp_request_t *r, stu_buf_t *src);
+stu_int32_t  stu_rtmp_parse_url(stu_rtmp_url_t *url, u_char *src, size_t len);
 
 #endif /* STUDEASE_CN_RTMP_STU_RTMP_PARSE_H_ */

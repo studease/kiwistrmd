@@ -96,50 +96,55 @@ typedef unsigned char          stu_bool_t;
 #define STU_ABORT             -6
 
 
-#define stu_abs(value)         (((value) >= 0) ? (value) : - (value))
-#define stu_max(val1, val2)    ((val1 < val2) ? (val2) : (val1))
-#define stu_min(val1, val2)    ((val1 > val2) ? (val2) : (val1))
+#define stu_abs(value)      (((value) >= 0) ? (value) : - (value))
+#define stu_max(val1, val2)  ((val1 < val2) ? (val2) : (val1))
+#define stu_min(val1, val2)  ((val1 > val2) ? (val2) : (val1))
 
 
-#define CR                     (u_char) '\r'
-#define LF                     (u_char) '\n'
-#define HT                     (u_char) '\t'
-#define CRLF                   "\r\n"
-#define LFHT                   "\n\t"
+#define CR                    (u_char) '\r'
+#define LF                    (u_char) '\n'
+#define HT                    (u_char) '\t'
+#define CRLF                  "\r\n"
+#define LFHT                  "\n\t"
 
 #define stu_inline             inline
 
 
-typedef struct stu_event_s    stu_event_t;
-typedef struct stu_upstream_s stu_upstream_t;
+typedef struct stu_file_s        stu_file_t;
+typedef struct stu_event_s       stu_event_t;
+typedef struct stu_connection_s  stu_connection_t;
+typedef struct stu_upstream_s    stu_upstream_t;
 
 typedef void (*stu_event_handler_pt)(stu_event_t *ev);
+
+typedef ssize_t (*stu_recv_pt)(stu_connection_t *c, u_char *buf, size_t size);
+typedef ssize_t (*stu_send_pt)(stu_connection_t *c, u_char *buf, size_t size);
 
 
 #include "stu_string.h"
 #include "stu_queue.h"
-#if (STU_LINUX)
-#include "../os/unix/stu_file.h"
-# else
-#include "../os/win32/stu_file.h"
-# endif
 #include "stu_mutex.h"
 #include "stu_rwlock.h"
 #include "stu_spinlock.h"
 #include "stu_rbtree.h"
-#include "stu_time.h"
-#include "stu_log.h"
 #if (STU_LINUX)
-#include "../os/unix/stu_atomic.h"
-#include "../os/unix/stu_errno.h"
-#include "../os/unix/stu_shmem.h"
-#include "../os/unix/stu_os.h"
-# else
-#include "../os/win32/stu_atomic.h"
-#include "../os/win32/stu_errno.h"
-#include "../os/win32/stu_shmem.h"
-#include "../os/win32/stu_os.h"
-# endif
+#include "unix/stu_atomic.h"
+#include "unix/stu_errno.h"
+#include "unix/stu_shmem.h"
+#include "unix/stu_os.h"
+#include "unix/stu_time.h"
+#include "unix/stu_file.h"
+#else
+#include "win32/stu_atomic.h"
+#include "win32/stu_errno.h"
+#include "win32/stu_shmem.h"
+#include "win32/stu_os.h"
+#include "win32/stu_time.h"
+#include "win32/stu_file.h"
+#endif
+#include "stu_times.h"
+#include "stu_files.h"
+#include "stu_log.h"
 #include "stu_base64.h"
 #include "stu_sha1.h"
 #include "stu_hmac.h"
@@ -152,22 +157,22 @@ typedef void (*stu_event_handler_pt)(stu_event_t *ev);
 #include "stu_list.h"
 #include "stu_hash.h"
 #if (STU_LINUX)
-#include "../os/unix/stu_socket.h"
-# else
-#include "../os/win32/stu_socket.h"
-# endif
+#include "unix/stu_socket.h"
+#else
+#include "win32/stu_socket.h"
+#endif
 #include "stu_inet.h"
-#include "../event/stu_event.h"
+#include "event/stu_event.h"
 #include "stu_connection.h"
 #include "stu_upstream.h"
 #include "stu_timer.h"
 #include "stu_mq.h"
 #include "stu_thread.h"
 #if (STU_LINUX)
-#include "../os/unix/stu_process.h"
-# else
-#include "../os/win32/stu_process.h"
-# endif
+#include "unix/stu_process.h"
+#else
+#include "win32/stu_process.h"
+#endif
 #include "../utils/stu_utils.h"
 
 #endif /* STUDEASE_CN_CORE_STU_CORE_H_ */

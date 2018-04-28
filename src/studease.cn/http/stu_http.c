@@ -103,15 +103,15 @@ stu_http_listen(stu_fd_t evfd, uint16_t port) {
 		return STU_ERROR;
 	}
 
-	c->read.evfd = evfd;
-	c->read.handler = stu_http_handler;
+	c->read->evfd = evfd;
+	c->read->handler = stu_http_handler;
 
-	if (stu_event_add(&c->read, STU_READ_EVENT, 0) == STU_ERROR) {
+	if (stu_event_add(c->read, STU_READ_EVENT, 0) == STU_ERROR) {
 		stu_log_error(0, "Failed to add http server event.");
 		return STU_ERROR;
 	}
 
-	bzero(&(sa.sin_zero), 8);
+	stu_memzero(&sa.sin_zero, 8);
 	sa.sin_family = AF_INET;
 	sa.sin_addr.s_addr = htons(INADDR_ANY);
 	sa.sin_port = htons(port);
@@ -176,14 +176,14 @@ again:
 		stu_http_thread_n = 0;
 	}
 
-	c->read.evfd = stu_threads[stu_http_thread_n].evfd;
-	c->write.evfd = stu_threads[stu_http_thread_n].evfd;
+	c->read->evfd = stu_threads[stu_http_thread_n].evfd;
+	c->write->evfd = stu_threads[stu_http_thread_n].evfd;
 	c->recv = stu_os_io.recv;
 	c->send = stu_os_io.send;
 
-	c->read.handler = stu_http_request_read_handler;
+	c->read->handler = stu_http_request_read_handler;
 
-	if (stu_event_add(&c->read, STU_READ_EVENT, STU_CLEAR_EVENT) == STU_ERROR) {
+	if (stu_event_add(c->read, STU_READ_EVENT, STU_CLEAR_EVENT) == STU_ERROR) {
 		stu_log_error(0, "Failed to add http client read event.");
 		return;
 	}

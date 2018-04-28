@@ -1,7 +1,7 @@
 /*
  * stu_http_request.c
  *
- *  Created on: 2017年11月22日
+ *  Created on: 2017骞�11鏈�22鏃�
  *      Author: Tony Lau
  */
 
@@ -79,7 +79,7 @@ stu_http_request_read_handler(stu_event_t *ev) {
 
 again:
 
-	n = recv(c->fd, c->buffer.last, c->buffer.size, 0);
+	n = c->recv(c, c->buffer.last, c->buffer.size);
 	if (n == -1) {
 		err = stu_errno;
 		if (err == EINTR) {
@@ -105,7 +105,7 @@ again:
 	stu_log_debug(4, "recv: fd=%d, bytes=%d.", c->fd, n);
 
 	if (stu_strncmp(c->buffer.start, STU_FLASH_POLICY_FILE_REQUEST.data, STU_FLASH_POLICY_FILE_REQUEST.len) == 0) {
-		n = send(c->fd, STU_FLASH_POLICY_FILE.data, STU_FLASH_POLICY_FILE.len, 0);
+		n = c->send(c, STU_FLASH_POLICY_FILE.data, STU_FLASH_POLICY_FILE.len);
 		if (n == -1) {
 			stu_log_debug(4, "Failed to send policy file: fd=%d.", c->fd);
 			goto failed;
@@ -158,8 +158,8 @@ stu_http_create_request(stu_connection_t *c) {
 	r->connection = c;
 	r->header_in = r->busy ? r->busy : &c->buffer;
 
-	stu_hash_init(&r->headers_in.headers, STU_HTTP_HEADER_MAX_RECORDS, NULL, STU_HASH_FLAGS_LOWCASE|STU_HASH_FLAGS_REPLACE);
-	stu_hash_init(&r->headers_out.headers, STU_HTTP_HEADER_MAX_RECORDS, NULL, STU_HASH_FLAGS_LOWCASE|STU_HASH_FLAGS_REPLACE);
+	stu_hash_init(&r->headers_in.headers, STU_HTTP_HEADER_MAX_RECORDS, NULL, STU_HASH_FLAGS_LOWCASE);
+	stu_hash_init(&r->headers_out.headers, STU_HTTP_HEADER_MAX_RECORDS, NULL, STU_HASH_FLAGS_LOWCASE);
 
 	return r;
 }
@@ -390,7 +390,7 @@ stu_http_read_request_header(stu_http_request_t *r) {
 
 again:
 
-	n = recv(c->fd, r->header_in->last, r->header_in->end - r->header_in->last, 0);
+	n = c->recv(c, r->header_in->last, r->header_in->end - r->header_in->last);
 	if (n == -1) {
 		err = stu_errno;
 		if (err == EINTR) {
@@ -536,8 +536,8 @@ stu_http_process_request(stu_http_request_t *r) {
 
 	c = r->connection;
 
-	if (c->read.timer_set) {
-		stu_timer_del(&c->read);
+	if (c->read->timer_set) {
+		stu_timer_del(c->read);
 	}
 
 	// TODO: use rwlock
@@ -943,7 +943,7 @@ stu_http_send_special_response(stu_http_request_t *r, stu_int32_t rc) {
 		buf.last = stu_sprintf(buf.last, "%s/%s\n", __NAME.data, __VERSION.data);
 	}
 
-	n = send(c->fd, buf.pos, buf.last - buf.pos, 0);
+	n = c->send(c, buf.pos, buf.last - buf.pos);
 	if (n == -1) {
 		stu_log_error(stu_errno, "Failed to send http response: fd=%d.", c->fd);
 		stu_http_close_connection(c);
@@ -962,8 +962,8 @@ stu_http_request_empty_handler(stu_http_request_t *r) {
 
 void
 stu_http_free_request(stu_http_request_t *r) {
-	stu_hash_destroy(&r->headers_in.headers);
-	stu_hash_destroy(&r->headers_out.headers);
+	stu_hash_destroy(&r->headers_in.headers, NULL);
+	stu_hash_destroy(&r->headers_out.headers, NULL);
 
 	r->connection->request = NULL;
 }

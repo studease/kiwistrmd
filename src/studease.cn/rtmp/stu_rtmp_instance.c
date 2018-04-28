@@ -1,7 +1,7 @@
 /*
  * stu_rtmp_instance.c
  *
- *  Created on: 2018年1月16日
+ *  Created on: 2018骞�1鏈�16鏃�
  *      Author: Tony Lau
  */
 
@@ -11,70 +11,39 @@ stu_str_t  stu_rtmp_definst = stu_string("_definst_");
 
 
 stu_int32_t
-stu_instance_insert(stu_hash_t *hash, stu_rtmp_netconnection_t *nc) {
-	stu_int32_t  rc;
+stu_rtmp_instance_init(stu_rtmp_instance_t *inst, u_char *name, size_t len) {
+	if (inst->name.data) {
+		stu_rtmp_apps.hooks.free_fn(inst->name.data);
+		stu_str_null(&inst->name);
+	}
 
-	stu_mutex_lock(&hash->lock);
-	rc = stu_instance_insert_locked(hash, nc);
-	stu_mutex_unlock(&hash->lock);
-
-	return rc;
-}
-
-stu_int32_t
-stu_instance_insert_locked(stu_hash_t *hash, stu_rtmp_netconnection_t *nc) {
-	stu_rtmp_instance_t *inst;
-	stu_uint32_t         hk;
-
-	hk = stu_hash_key(nc->inst_name.data, nc->inst_name.len, hash->flags);
-
-	inst = stu_hash_find_locked(hash, hk, nc->inst_name.data, nc->inst_name.len);
-	if (inst == NULL) {
-		inst = hash->hooks.malloc_fn(sizeof(stu_rtmp_instance_t));
-		if (inst == NULL) {
-			stu_log_error(0, "Failed to malloc rtmp instance: %s.", nc->inst_name.data);
-			return STU_ERROR;
-		}
-
-		inst->name.data = hash->hooks.malloc_fn(nc->inst_name.len + 1);
+	if (name && len) {
+		inst->name.data = stu_rtmp_apps.hooks.malloc_fn(len + 1);
 		if (inst->name.data == NULL) {
-			stu_log_error(0, "Failed to malloc rtmp instance name: %s.", nc->inst_name.data);
+			stu_log_error(0, "Failed to malloc rtmp instance name: %s.", name);
 			return STU_ERROR;
 		}
 
-		stu_strncpy(inst->name.data, nc->inst_name.data, nc->inst_name.len);
-		inst->name.len = nc->inst_name.len;
-
-		stu_hash_init(&inst->connections, STU_INSTANCE_LIST_DEFAULT_SIZE, &hash->hooks, hash->flags);
-		stu_hash_init(&inst->streams, STU_INSTANCE_LIST_DEFAULT_SIZE, &hash->hooks, hash->flags);
-
-		if (stu_hash_insert_locked(hash, &nc->inst_name, inst) == STU_ERROR) {
-			stu_log_error(0, "Failed to insert rtmp instance: %s.", nc->inst_name.data);
-			return STU_ERROR;
-		}
+		stu_strncpy(inst->name.data, name, len);
+		inst->name.len = len;
 	}
 
-	nc->instance = inst;
+	if (stu_hash_init(&inst->connections, STU_RTMP_INST_DEFAULT_SIZE, &stu_rtmp_apps.hooks, stu_rtmp_apps.flags) == STU_ERROR) {
+		stu_log_error(0, "Failed to init connection hash of rtmp instance: %s.", inst->name.data);
+		return STU_ERROR;
+	}
 
-	return stu_hash_insert(&inst->connections, &nc->far_id, nc);
+	if (stu_hash_init(&inst->streams, STU_RTMP_INST_DEFAULT_SIZE, &stu_rtmp_apps.hooks, stu_rtmp_apps.flags) == STU_ERROR) {
+		stu_log_error(0, "Failed to init stream hash of rtmp instance: %s.", inst->name.data);
+		return STU_ERROR;
+	}
+
+	return STU_OK;
 }
 
 void
-stu_instance_remove(stu_hash_t *hash, stu_rtmp_netconnection_t *nc) {
-	stu_mutex_lock(&hash->lock);
-	stu_instance_insert_locked(hash, nc);
-	stu_mutex_unlock(&hash->lock);
-}
-
-void
-stu_instance_remove_locked(stu_hash_t *hash, stu_rtmp_netconnection_t *nc) {
-	stu_rtmp_instance_t *inst;
-	stu_uint32_t         hk;
-
-	hk = stu_hash_key(nc->inst_name.data, nc->inst_name.len, hash->flags);
-
-	inst = stu_hash_find_locked(hash, hk, nc->inst_name.data, nc->inst_name.len);
-	if (inst) {
-		stu_hash_remove(&inst->connections, hk, nc->far_id.data, nc->far_id.len);
-	}
+stu_rtmp_instance_cleanup(stu_rtmp_instance_t *inst) {
+	stu_mutex_lock(&inst->lock);
+	stu_hash_destroy_locked(&inst->connections, (stu_hash_cleanup_pt) stu_rtmp_close_connection);
+	stu_mutex_unlock(&inst->lock);
 }

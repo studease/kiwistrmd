@@ -1,7 +1,7 @@
 /*
  * stu_rtmp_filter.c
  *
- *  Created on: 2018年1月24日
+ *  Created on: 2018骞�1鏈�24鏃�
  *      Author: Tony Lau
  */
 
@@ -21,7 +21,7 @@ stu_int32_t
 stu_rtmp_filter_init_hash() {
 	stu_rtmp_filter_t *f;
 
-	if (stu_hash_init(&stu_rtmp_filter_hash, STU_RTMP_FILTER_MAX_RECORDS, NULL, STU_HASH_FLAGS_LOWCASE|STU_HASH_FLAGS_REPLACE) == STU_ERROR) {
+	if (stu_hash_init(&stu_rtmp_filter_hash, STU_RTMP_FILTER_MAX_RECORDS, NULL, STU_HASH_FLAGS_LOWCASE) == STU_ERROR) {
 		return STU_ERROR;
 	}
 

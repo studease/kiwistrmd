@@ -10,9 +10,11 @@
 
 #include "../stu_config.h"
 #include "../core/stu_core.h"
+#include "../codec/stu_codec.h"
 
 #define STU_RTMP_VERSION_3  0x03
 
+typedef struct stu_rtmp_connection_s  stu_rtmp_connection_t;
 typedef struct stu_rtmp_instance_s    stu_rtmp_instance_t;
 typedef struct stu_rtmp_application_s stu_rtmp_application_t;
 typedef struct stu_rtmp_request_s     stu_rtmp_request_t;
@@ -24,9 +26,9 @@ typedef struct stu_rtmp_upstream_s    stu_rtmp_upstream_t;
 #include "stu_rtmp_amf.h"
 #include "stu_rtmp_chunk.h"
 #include "stu_rtmp_message.h"
-#include "stu_rtmp_netconnection.h"
+#include "stu_rtmp_responder.h"
+#include "stu_rtmp_connection.h"
 #include "stu_rtmp_stream.h"
-#include "stu_rtmp_netstream.h"
 #include "stu_rtmp_instance.h"
 #include "stu_rtmp_application.h"
 #include "stu_rtmp_filter.h"

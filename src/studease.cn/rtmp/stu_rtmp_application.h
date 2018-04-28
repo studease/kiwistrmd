@@ -1,7 +1,7 @@
 /*
  * stu_rtmp_application.h
  *
- *  Created on: 2018年1月16日
+ *  Created on: 2018骞�1鏈�16鏃�
  *      Author: Tony Lau
  */
 
@@ -10,11 +10,12 @@
 
 #include "stu_rtmp.h"
 
-#define STU_RTMP_APPLICATION_LIST_DEFAULT_SIZE          128
+#define STU_RTMP_APP_LIST_DEFAULT_SIZE          128
+#define STU_RTMP_APP_DEFAULT_SIZE               8
 
-#define STU_RTMP_APPLICATION_NAME_MAX_LEN               16
+#define STU_RTMP_APP_PUSH_STAT_DEFAULT_INTERVAL 300
 
-#define STU_RTMP_APPLICATION_PUSH_STAT_DEFAULT_INTERVAL 300
+typedef stu_int32_t (*stu_rtmp_application_handler_pt)(stu_rtmp_application_t *app);
 
 typedef struct {
 	stu_uint64_t         launch_time;
@@ -47,6 +48,8 @@ typedef struct {
 } stu_rtmp_app_stat_t;
 
 struct stu_rtmp_application_s {
+	stu_mutex_t          lock;
+
 	stu_str_t            name;
 	stu_hash_t           instances;
 	stu_uint8_t          state;
@@ -56,18 +59,25 @@ struct stu_rtmp_application_s {
 	unsigned             record:1;
 };
 
+extern stu_hash_t  stu_rtmp_apps;
+
+extern stu_rtmp_application_handler_pt  stu_rtmp_on_application_start;
+extern stu_rtmp_application_handler_pt  stu_rtmp_on_application_stop;
+
 stu_int32_t  stu_rtmp_application_init_hash();
 
-stu_int32_t  stu_rtmp_accept(stu_rtmp_netconnection_t *nc);
-stu_int32_t  stu_rtmp_reject(stu_rtmp_netconnection_t *nc);
+stu_int32_t  stu_rtmp_application_init(stu_rtmp_application_t *app, u_char *name, size_t len);
+void         stu_rtmp_application_cleanup(stu_rtmp_application_t *app);
 
 stu_int32_t  stu_rtmp_application_on_start(stu_rtmp_application_t *app);
 stu_int32_t  stu_rtmp_application_on_stop(stu_rtmp_application_t *app);
 
-stu_int32_t  stu_rtmp_application_insert(stu_rtmp_netconnection_t *nc);
-stu_int32_t  stu_rtmp_application_insert_locked(stu_rtmp_netconnection_t *nc);
+stu_int32_t  stu_rtmp_accept(stu_rtmp_connection_t *nc);
+stu_int32_t  stu_rtmp_reject(stu_rtmp_connection_t *nc);
 
-void         stu_rtmp_application_remove(stu_rtmp_netconnection_t *nc);
-void         stu_rtmp_application_remove_locked(stu_rtmp_netconnection_t *nc);
+stu_int32_t  stu_rtmp_application_insert(stu_rtmp_connection_t *nc);
+stu_int32_t  stu_rtmp_application_insert_locked(stu_rtmp_connection_t *nc);
+void         stu_rtmp_application_remove(stu_rtmp_connection_t *nc);
+void         stu_rtmp_application_remove_locked(stu_rtmp_connection_t *nc);
 
 #endif /* STUDEASE_CN_RTMP_STU_RTMP_APPLICATION_H_ */

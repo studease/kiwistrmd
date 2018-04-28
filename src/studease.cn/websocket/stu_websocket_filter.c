@@ -1,7 +1,7 @@
 /*
  * stu_websocket_filter.c
  *
- *  Created on: 2017年11月29日
+ *  Created on: 2017骞�11鏈�29鏃�
  *      Author: Tony Lau
  */
 
@@ -21,7 +21,7 @@ stu_int32_t
 stu_websocket_filter_init_hash() {
 	stu_websocket_filter_t *f;
 
-	if (stu_hash_init(&stu_websocket_filter_hash, STU_WEBSOCKET_FILTER_MAX_RECORDS, NULL, STU_HASH_FLAGS_LOWCASE|STU_HASH_FLAGS_REPLACE) == STU_ERROR) {
+	if (stu_hash_init(&stu_websocket_filter_hash, STU_WEBSOCKET_FILTER_MAX_RECORDS, NULL, STU_HASH_FLAGS_LOWCASE) == STU_ERROR) {
 		return STU_ERROR;
 	}
 

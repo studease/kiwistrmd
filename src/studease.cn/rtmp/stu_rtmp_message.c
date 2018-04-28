@@ -1,51 +1,59 @@
 /*
  * stu_rtmp_message.c
  *
- *  Created on: 2018年1月16日
+ *  Created on: 2018骞�1鏈�16鏃�
  *      Author: Tony Lau
  */
 
 #include "stu_rtmp.h"
 
-stu_str_t  STU_RTMP_CMD_CONNECT       = stu_string("connect");
-stu_str_t  STU_RTMP_CMD_CLOSE         = stu_string("close");
-stu_str_t  STU_RTMP_CMD_CREATE_STREAM = stu_string("createStream");
-stu_str_t  STU_RTMP_CMD_RESULT        = stu_string("_result");
-stu_str_t  STU_RTMP_CMD_ERROR         = stu_string("_error");
+stu_str_t  STU_RTMP_CMD_CONNECT        = stu_string("connect");
+stu_str_t  STU_RTMP_CMD_CLOSE          = stu_string("close");
+stu_str_t  STU_RTMP_CMD_CREATE_STREAM  = stu_string("createStream");
+stu_str_t  STU_RTMP_CMD_RESULT         = stu_string("_result");
+stu_str_t  STU_RTMP_CMD_ERROR          = stu_string("_error");
 
-stu_str_t  STU_RTMP_CMD_PLAY          = stu_string("play");
-stu_str_t  STU_RTMP_CMD_PLAY2         = stu_string("play2");
-stu_str_t  STU_RTMP_CMD_DELETE_STREAM = stu_string("deleteStream");
-stu_str_t  STU_RTMP_CMD_CLOSE_STREAM  = stu_string("closeStream");
-stu_str_t  STU_RTMP_CMD_RECEIVE_AUDIO = stu_string("receiveAudio");
-stu_str_t  STU_RTMP_CMD_RECEIVE_VIDEO = stu_string("receiveVideo");
-stu_str_t  STU_RTMP_CMD_PUBLISH       = stu_string("publish");
-stu_str_t  STU_RTMP_CMD_SEEK          = stu_string("seek");
-stu_str_t  STU_RTMP_CMD_PAUSE         = stu_string("pause");
-stu_str_t  STU_RTMP_CMD_ON_STATUS     = stu_string("onStatus");
+stu_str_t  STU_RTMP_CMD_PLAY           = stu_string("play");
+stu_str_t  STU_RTMP_CMD_PLAY2          = stu_string("play2");
+stu_str_t  STU_RTMP_CMD_DELETE_STREAM  = stu_string("deleteStream");
+stu_str_t  STU_RTMP_CMD_CLOSE_STREAM   = stu_string("closeStream");
+stu_str_t  STU_RTMP_CMD_RECEIVE_AUDIO  = stu_string("receiveAudio");
+stu_str_t  STU_RTMP_CMD_RECEIVE_VIDEO  = stu_string("receiveVideo");
+stu_str_t  STU_RTMP_CMD_PUBLISH        = stu_string("publish");
+stu_str_t  STU_RTMP_CMD_SEEK           = stu_string("seek");
+stu_str_t  STU_RTMP_CMD_PAUSE          = stu_string("pause");
+stu_str_t  STU_RTMP_CMD_ON_STATUS      = stu_string("onStatus");
 
-// outdated command
+// outdated
 stu_str_t  STU_RTMP_CMD_RELEASE_STREAM = stu_string("releaseStream");
 stu_str_t  STU_RTMP_CMD_FC_PUBLISH     = stu_string("FCPublish");
 stu_str_t  STU_RTMP_CMD_ON_FC_PUBLISH  = stu_string("onFCPublish");
 
-stu_str_t  STU_RTMP_SET_BUFFER_LENGTH = stu_string("setBufferLength");
-stu_str_t  STU_RTMP_SET_DATA_FRAME    = stu_string("@setDataFrame");
-stu_str_t  STU_RTMP_CLEAR_DATA_FRAME  = stu_string("@clearDataFrame");
-stu_str_t  STU_RTMP_ON_META_DATA      = stu_string("onMetaData");
+stu_str_t  STU_RTMP_SET_DATA_FRAME     = stu_string("@setDataFrame");
+stu_str_t  STU_RTMP_CLEAR_DATA_FRAME   = stu_string("@clearDataFrame");
+stu_str_t  STU_RTMP_ON_META_DATA       = stu_string("onMetaData");
 
-stu_str_t  STU_RTMP_LEVEL_ERROR   = stu_string("error");
-stu_str_t  STU_RTMP_LEVEL_STATUS  = stu_string("status");
-stu_str_t  STU_RTMP_LEVEL_WARNING = stu_string("warning");
+stu_str_t  STU_RTMP_LEVEL              = stu_string("level");
+stu_str_t  STU_RTMP_CODE               = stu_string("code");
+stu_str_t  STU_RTMP_DESCRIPTION        = stu_string("description");
 
-stu_str_t  STU_RTMP_CODE_NETCONNECTION_CALL_FAILED         = stu_string("NetConnection.Call.Failed");
-stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_APPSHUTDOWN = stu_string("NetConnection.Connect.AppShutdown");
-stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_CLOSED      = stu_string("NetConnection.Connect.Closed");
-stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_FAILED      = stu_string("NetConnection.Connect.Failed");
-stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_IDLETIMEOUT = stu_string("NetConnection.Connect.IdleTimeout");
-stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_INVALIDAPP  = stu_string("NetConnection.Connect.InvalidApp");
-stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_REJECTED    = stu_string("NetConnection.Connect.Rejected");
-stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_SUCCESS     = stu_string("NetConnection.Connect.Success");
+stu_str_t  STU_RTMP_LEVEL_ERROR        = stu_string("error");
+stu_str_t  STU_RTMP_LEVEL_STATUS       = stu_string("status");
+stu_str_t  STU_RTMP_LEVEL_WARNING      = stu_string("warning");
+
+stu_str_t  STU_RTMP_PUBLISHING_TYPE_LIVE                     = stu_string("live");
+stu_str_t  STU_RTMP_PUBLISHING_TYPE_RECORD                   = stu_string("record");
+stu_str_t  STU_RTMP_PUBLISHING_TYPE_APPEND                   = stu_string("append");
+stu_str_t  STU_RTMP_PUBLISHING_TYPE_APPEND_WITH_GAP          = stu_string("appendWithGap");
+
+stu_str_t  STU_RTMP_CODE_NETCONNECTION_CALL_FAILED           = stu_string("NetConnection.Call.Failed");
+stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_APPSHUTDOWN   = stu_string("NetConnection.Connect.AppShutdown");
+stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_CLOSED        = stu_string("NetConnection.Connect.Closed");
+stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_FAILED        = stu_string("NetConnection.Connect.Failed");
+stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_IDLETIMEOUT   = stu_string("NetConnection.Connect.IdleTimeout");
+stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_INVALIDAPP    = stu_string("NetConnection.Connect.InvalidApp");
+stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_REJECTED      = stu_string("NetConnection.Connect.Rejected");
+stu_str_t  STU_RTMP_CODE_NETCONNECTION_CONNECT_SUCCESS       = stu_string("NetConnection.Connect.Success");
 
 stu_str_t  STU_RTMP_CODE_NETSTREAM_BUFFER_EMPTY              = stu_string("NetStream.Buffer.Empty");
 stu_str_t  STU_RTMP_CODE_NETSTREAM_BUFFER_FLUSH              = stu_string("NetStream.Buffer.Flush");
@@ -76,21 +84,58 @@ stu_str_t  STU_RTMP_CODE_NETSTREAM_UNPAUSE_NOTIFY            = stu_string("NetSt
 stu_str_t  STU_RTMP_CODE_NETSTREAM_UNPUBLISH_SUCCESS         = stu_string("NetStream.Unpublish.Success");
 stu_str_t  STU_RTMP_CODE_NETSTREAM_VIDEO_DIMENSIONCHANGE     = stu_string("NetStream.Video.DimensionChange");
 
-stu_hash_t             stu_rtmp_command_hash;
+extern stu_rtmp_message_listener_t  stu_rtmp_message_listeners[];
+extern stu_rtmp_command_listener_t  stu_rtmp_command_listeners[];
+extern stu_rtmp_data_listener_t     stu_rtmp_data_listeners[];
 
-extern stu_rtmp_command_t  rtmp_command[];
+stu_hash_t  stu_rtmp_message_listener_hash;
+stu_hash_t  stu_rtmp_command_listener_hash;
+stu_hash_t  stu_rtmp_data_listener_hash;
+stu_hash_t  stu_rtmp_status_listener_hash;
 
 
 stu_int32_t
 stu_rtmp_message_init() {
-	stu_rtmp_command_t *command;
+	stu_rtmp_message_listener_t *ml;
+	stu_rtmp_command_listener_t *cl;
+	stu_rtmp_data_listener_t    *dl;
+	u_char                       tmp[3];
+	stu_str_t                    key;
 
-	if (stu_hash_init(&stu_rtmp_command_hash, STU_RTMP_COMMAND_MAX_RECORDS, NULL, STU_HASH_FLAGS_LOWCASE|STU_HASH_FLAGS_REPLACE) == STU_ERROR) {
+	stu_memzero(tmp, 3);
+
+	// message listener
+	if (stu_hash_init(&stu_rtmp_message_listener_hash, STU_RTMP_LISTENER_DEFAULT_SIZE, NULL, STU_HASH_FLAGS_LOWCASE) == STU_ERROR) {
 		return STU_ERROR;
 	}
 
-	for (command = rtmp_command; command->name.len; command++) {
-		if (stu_hash_insert(&stu_rtmp_command_hash, &command->name, command) == STU_ERROR) {
+	for (ml = stu_rtmp_message_listeners; ml->type_id; ml++) {
+		key.data = tmp;
+		key.len = stu_sprintf(tmp, "%u", ml->type_id) - tmp;
+
+		if (stu_hash_insert_locked(&stu_rtmp_message_listener_hash, &key, ml) == STU_ERROR) {
+			return STU_ERROR;
+		}
+	}
+
+	// command listener
+	if (stu_hash_init(&stu_rtmp_command_listener_hash, STU_RTMP_LISTENER_DEFAULT_SIZE, NULL, STU_HASH_FLAGS_LOWCASE) == STU_ERROR) {
+		return STU_ERROR;
+	}
+
+	for (cl = stu_rtmp_command_listeners; cl->name.len; cl++) {
+		if (stu_hash_insert_locked(&stu_rtmp_command_listener_hash, &cl->name, cl) == STU_ERROR) {
+			return STU_ERROR;
+		}
+	}
+
+	// data listener
+	if (stu_hash_init(&stu_rtmp_data_listener_hash, STU_RTMP_LISTENER_DEFAULT_SIZE, NULL, STU_HASH_FLAGS_LOWCASE) == STU_ERROR) {
+		return STU_ERROR;
+	}
+
+	for (dl = stu_rtmp_data_listeners; dl->name.len; dl++) {
+		if (stu_hash_insert_locked(&stu_rtmp_data_listener_hash, &dl->name, dl) == STU_ERROR) {
 			return STU_ERROR;
 		}
 	}

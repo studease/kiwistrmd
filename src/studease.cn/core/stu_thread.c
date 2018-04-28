@@ -52,7 +52,7 @@ stu_thread_create(stu_tid_t *tid, stu_fd_t *evfd, void *(*func)(void *arg), void
 
 	if (evfd != NULL) {
 		*evfd = stu_event_create();
-		if (*evfd == -1) {
+		if (*evfd == STU_FILE_INVALID) {
 			stu_log_error(0, "Failed to create thread event.");
 			return STU_ERROR;
 		}

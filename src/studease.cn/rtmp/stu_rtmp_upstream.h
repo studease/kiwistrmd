@@ -1,7 +1,7 @@
 /*
  * stu_rtmp_upstream.h
  *
- *  Created on: 2018年1月16日
+ *  Created on: 2018骞�1鏈�16鏃�
  *      Author: Tony Lau
  */
 
@@ -22,7 +22,9 @@ typedef struct {
 	stu_uint16_t  method;
 	stu_str_t     name;
 	stu_addr_t    dst_addr;
+#if (STU_LINUX)
 	in_port_t     dst_port;
+#endif
 	stu_str_t     dst_app;
 	stu_str_t     dst_inst;
 	stu_str_t     dst_name;

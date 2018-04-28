@@ -1,7 +1,7 @@
 /*
  * stu_websocket_request.c
  *
- *  Created on: 2017年11月27日
+ *  Created on: 2017骞�11鏈�27鏃�
  *      Author: Tony Lau
  */
 
@@ -38,7 +38,7 @@ stu_websocket_request_read_handler(stu_event_t *ev) {
 
 again:
 
-	n = recv(c->fd, c->buffer.last, c->buffer.size, 0);
+	n = c->recv(c, c->buffer.last, c->buffer.size);
 	if (n == -1) {
 		err = stu_errno;
 		if (err == EINTR) {
@@ -205,7 +205,7 @@ stu_websocket_read_request_buffer(stu_websocket_request_t *r) {
 
 again:
 
-	n = recv(c->fd, r->frame_in->last, r->frame_in->end - r->frame_in->last, 0);
+	n = c->recv(c, r->frame_in->last, r->frame_in->end - r->frame_in->last);
 	if (n == -1) {
 		err = stu_errno;
 		if (err == EINTR) {
@@ -313,8 +313,8 @@ stu_websocket_process_request(stu_websocket_request_t *r) {
 
 	c = r->connection;
 
-	if (c->read.timer_set) {
-		stu_timer_del(&c->read);
+	if (c->read->timer_set) {
+		stu_timer_del(c->read);
 	}
 
 	// TODO: use rwlock

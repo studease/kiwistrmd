@@ -1,7 +1,7 @@
 /*
  * stu_rtmp_chunk.c
  *
- *  Created on: 2018年1月16日
+ *  Created on: 2018骞�1鏈�16鏃�
  *      Author: Tony Lau
  */
 
@@ -9,129 +9,61 @@
 
 
 stu_int32_t
-stu_rtmp_write_by_chunk(stu_rtmp_request_t *r, stu_rtmp_chunk_t *ck) {
-	u_char       *p;
-	u_char        tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
-	stu_uint32_t  i, size;
-	stu_int32_t   n;
-
-	if (ck->header.message_len < 2) {
-		stu_log_error(0, "Failed to write chunk: Data not enough[1].");
-		return STU_ERROR;
-	}
-
-	p = tmp;
-	ck->payload.pos = ck->payload.start;
-
-	for (i = 0; i < ck->header.message_len; /* void */) {
-		if (ck->basic.csid < 64) {
-			*p++ = ck->basic.fmt << 6 | ck->basic.csid;
-		} else if (ck->basic.csid < 320) {
-			*p++ = ck->basic.fmt << 6 | 0x00;
-			*p++ = ck->basic.csid - 64;
-		} else if (ck->basic.csid < 65600) {
-			*p++ = ck->basic.fmt << 6 | 0x01;
-			*p++ = ck->basic.csid;
-			*p++ = ck->basic.csid >> 8;
-		} else {
-			stu_log_error(0, "Failed to write chunk: Chunk size out of range.");
+stu_rtmp_chunk_append(stu_rtmp_chunk_t *ck, u_char *data, size_t len) {
+	if (ck->payload.end - ck->payload.last < len) {
+		if (stu_rtmp_chunk_grow(ck, len) == STU_ERROR) {
+			stu_log_error(0, "Failed to grow chunk: size=%d.", len);
 			return STU_ERROR;
 		}
-
-		if (ck->basic.fmt < 3) {
-			if (ck->header.timestamp < 0xFFFFFF) {
-				*p++ = ck->header.timestamp >> 16;
-				*p++ = ck->header.timestamp >> 8;
-				*p++ = ck->header.timestamp;
-			} else {
-				*p++ = 0xFF;
-				*p++ = 0xFF;
-				*p++ = 0xFF;
-			}
-		}
-
-		if (ck->basic.fmt < 2) {
-			*p++ = ck->header.message_len >> 16;
-			*p++ = ck->header.message_len >> 8;
-			*p++ = ck->header.message_len;
-
-			*p++ = ck->header.type;
-		}
-
-		if (ck->basic.fmt == 0) {
-			*p++ = ck->header.stream_id;
-			*p++ = ck->header.stream_id >> 8;
-			*p++ = ck->header.stream_id >> 16;
-			*p++ = ck->header.stream_id >> 24;
-		}
-
-		// extended timestamp
-		if (ck->header.timestamp >= 0xFFFFFF) {
-			*p++ = ck->header.timestamp >> 24;
-			*p++ = ck->header.timestamp >> 16;
-			*p++ = ck->header.timestamp >> 8;
-			*p++ = ck->header.timestamp;
-		}
-
-		// chunk data
-		size = stu_min(ck->header.message_len - i, r->nc.near_chunk_size);
-		p = stu_memcpy(p, ck->payload.pos, size);
-
-		n = send(r->nc.connection->fd, tmp, p - tmp, 0);
-		if (n == -1) {
-			stu_log_error(stu_errno, "Failed to write chunk.");
-			return STU_ERROR;
-		}
-
-		i += size;
-		r->nc.stat.bytes_out += size;
-
-		if (i < ck->header.message_len) {
-			ck->basic.fmt = 3;
-		}
 	}
+
+	ck->payload.last = stu_memcpy(ck->payload.last, data, len);
 
 	return STU_OK;
 }
 
+stu_int32_t
+stu_rtmp_chunk_grow(stu_rtmp_chunk_t *ck, size_t size) {
+	stu_buf_t  buf;
 
-stu_rtmp_chunk_t *
-stu_rtmp_get_chunk(stu_rtmp_request_t *r, stu_uint32_t csid) {
-	stu_rtmp_chunk_t *ck;
-	stu_queue_t      *q;
+	buf.size = ck->payload.size + size;
 
-	for (q = stu_queue_tail(&r->chunks); q != stu_queue_sentinel(&r->chunks); q = stu_queue_prev(q)) {
-		ck = stu_queue_data(q, stu_rtmp_chunk_t, queue);
-		if (ck->state || ck->basic.csid == csid) {
-			goto done;
-		}
+	buf.start = (u_char *) stu_calloc(buf.size);
+	if (buf.start == NULL) {
+		return STU_ERROR;
 	}
 
-	ck = stu_calloc(sizeof(stu_rtmp_chunk_t));
-	if (ck == NULL) {
-		stu_log_error(0, "Failed to calloc rtmp chunk.");
-		return NULL;
+	buf.pos = buf.start + (ck->payload.pos - ck->payload.start);
+	buf.last = stu_memcpy(buf.start, ck->payload.start, stu_rtmp_chunk_length(ck));
+	buf.end = buf.start + buf.size;
+
+	if (ck->payload.start) {
+		stu_free(ck->payload.start);
 	}
 
-	stu_queue_insert_tail(&r->chunks, &ck->queue);
+	ck->payload = buf;
 
-done:
-
-	ck->basic.csid = csid;
-
-	return ck;
+	return STU_OK;
 }
 
 void
-stu_rtmp_free_chunk(stu_rtmp_request_t *r, stu_uint32_t csid) {
-	stu_rtmp_chunk_t *ck;
-	stu_queue_t      *q;
+stu_rtmp_chunk_cleanup(stu_rtmp_chunk_t *ck) {
+	ck->fmt = 0;
+	ck->csid = 0;
 
-	for (q = stu_queue_tail(&r->chunks); q != stu_queue_sentinel(&r->chunks); q = stu_queue_prev(q)) {
-		ck = stu_queue_data(q, stu_rtmp_chunk_t, queue);
-		if (ck->basic.csid == csid) {
-			stu_queue_remove(q);
-			break;
-		}
+	ck->timestamp = 0;
+	ck->type_id = 0;
+	ck->stream_id = 0;
+
+	if (ck->payload.start) {
+		stu_free(ck->payload.start);
 	}
+
+	ck->payload.start = NULL;
+	ck->payload.pos = ck->payload.last = ck->payload.start;
+	ck->payload.end = NULL;
+	ck->payload.size = 0;
+
+	ck->state = 0;
+	ck->extended = FALSE;
 }

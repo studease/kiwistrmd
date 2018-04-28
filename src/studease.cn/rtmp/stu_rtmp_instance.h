@@ -1,7 +1,7 @@
 /*
  * stu_rtmp_instance.h
  *
- *  Created on: 2018年1月16日
+ *  Created on: 2018骞�1鏈�16鏃�
  *      Author: Tony Lau
  */
 
@@ -10,9 +10,7 @@
 
 #include "stu_rtmp.h"
 
-#define STU_INSTANCE_LIST_DEFAULT_SIZE  128
-
-#define STU_INSTANCE_NAME_MAX_LEN       16
+#define STU_RTMP_INST_DEFAULT_SIZE  1024
 
 typedef struct {
 	stu_uint64_t          launch_time;
@@ -42,6 +40,8 @@ typedef struct {
 } stu_rtmp_inst_stat_t;
 
 struct stu_rtmp_instance_s {
+	stu_mutex_t           lock;
+
 	stu_str_t             name;
 	stu_hash_t            connections;
 	stu_hash_t            streams;
@@ -52,12 +52,11 @@ struct stu_rtmp_instance_s {
 	unsigned              record:1;
 };
 
-stu_int32_t  stu_instance_insert(stu_hash_t *hash, stu_rtmp_netconnection_t *nc);
-stu_int32_t  stu_instance_insert_locked(stu_hash_t *hash, stu_rtmp_netconnection_t *nc);
+extern stu_str_t  stu_rtmp_definst;
 
-void         stu_instance_remove(stu_hash_t *hash, stu_rtmp_netconnection_t *nc);
-void         stu_instance_remove_locked(stu_hash_t *hash, stu_rtmp_netconnection_t *nc);
+stu_int32_t  stu_rtmp_instance_init(stu_rtmp_instance_t *inst, u_char *name, size_t len);
+void         stu_rtmp_instance_cleanup(stu_rtmp_instance_t *inst);
 
-void         stu_instance_broadcast(stu_rtmp_instance_t *inst, u_char *data, size_t len, off_t off);
+void         stu_rtmp_instance_broadcast(stu_rtmp_instance_t *inst, u_char *data, size_t len, off_t off);
 
 #endif /* STUDEASE_CN_RTMP_STU_RTMP_INSTANCE_H_ */

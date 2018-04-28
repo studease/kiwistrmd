@@ -10,8 +10,12 @@
 
 #include "stu_rtmp.h"
 
-#define STU_RTMP_HANDSHAKER_BUFFER_SIZE     1537
+#define STU_RTMP_HANDSHAKER_BUFFER_SIZE     3073
+#define STU_RTMP_HANDSHAKER_C0C1_SIZE       1537
 #define STU_RTMP_HANDSHAKER_KEYLEN          SHA256_DIGEST_LENGTH
+
+#define STU_RTMP_HANDSHAKER_TYPE_SERVER     0x00
+#define STU_RTMP_HANDSHAKER_TYPE_CLIENT     0x01
 
 #define STU_RTMP_HANDSHAKER_SCHEME1         0x00
 #define STU_RTMP_HANDSHAKER_SCHEME2         0x01
@@ -22,18 +26,27 @@
 #define STU_RTMP_HANDSHAKER_DIGEST_SIZE     32
 #define STU_RTMP_HANDSHAKER_VERSION         0x5033029
 
-typedef struct {
-	stu_connection_t *connection;
+typedef struct stu_rtmp_handshaker_s stu_rtmp_handshaker_t;
 
-	stu_uint8_t       version;
-	stu_uint32_t      time;
-	stu_uint32_t      zero;
+struct stu_rtmp_handshaker_s {
+	stu_connection_t  *connection;
+
+	void             (*complete)(stu_rtmp_handshaker_t *h);
+	void             (*error)(stu_rtmp_handshaker_t *h);
+
+	stu_uint8_t        type;
+	stu_uint8_t        version;
+	stu_uint32_t       time;
+	stu_uint32_t       zero;
 
 	// used for parsing rtmp handshaker.
-	stu_uint8_t       state;
-	u_char           *start;
-	u_char           *random;
-} stu_rtmp_handshaker_t;
+	stu_uint8_t        state;
+	u_char            *start;
+	u_char            *random;
+};
+
+extern stu_str_t  STU_RTMP_HANDSHAKE_COMPLETE;
+extern stu_str_t  STU_RTMP_HANDSHAKE_ERROR;
 
 void  stu_rtmp_handshaker_read_handler(stu_event_t *ev);
 void  stu_rtmp_handshaker_write_handler(stu_event_t *ev);

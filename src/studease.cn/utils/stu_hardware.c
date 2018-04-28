@@ -1,7 +1,7 @@
 /*
  * stu_hardware.c
  *
- *  Created on: 2017年12月26日
+ *  Created on: 2017骞�12鏈�26鏃�
  *      Author: Tony Lau
  */
 
@@ -19,7 +19,7 @@ stu_hardware_get_hwaddr(u_char *dst) {
 
 	p = NULL;
 
-	fd = socket(AF_INET, SOCK_DGRAM, 0);
+	fd = stu_socket(AF_INET, SOCK_DGRAM, 0);
 	if (fd == -1) {
 		stu_log_error(stu_errno, "Failed to create socket for macaddr detection.");
 		return NULL;
@@ -65,7 +65,7 @@ stu_hardware_get_hwaddr(u_char *dst) {
 
 failed:
 
-	stu_close_socket(fd);
+	stu_socket_close(fd);
 
 	return p;
 }

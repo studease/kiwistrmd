@@ -1,0 +1,5 @@
+#codec files
+AUX_SOURCE_DIRECTORY(. DIR_STU_CODEC_SRC)
+
+#build codec
+ADD_LIBRARY(http ${DIR_STU_CODEC_SRC})

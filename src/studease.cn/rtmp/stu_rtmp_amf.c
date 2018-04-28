@@ -1,7 +1,7 @@
 /*
  * stu_rtmp_amf.c
  *
- *  Created on: 2018年1月16日
+ *  Created on: 2018骞�1鏈�16鏃�
  *      Author: Tony Lau
  */
 
@@ -125,10 +125,6 @@ stu_rtmp_amf_create_string(stu_str_t *key, u_char *value, size_t len) {
 	stu_str_t      *str;
 	size_t          size;
 
-	if (len >= 0xFFFF) {
-		return stu_rtmp_amf_create_long_string(key, value, len);
-	}
-
 	item = stu_rtmp_amf_create(len < 0xFFFF ? STU_RTMP_AMF_STRING : STU_RTMP_AMF_LONG_STRING, key);
 	if (item == NULL) {
 		return NULL;
@@ -240,16 +236,14 @@ stu_rtmp_amf_create_date(stu_str_t *key, stu_double_t ts, stu_uint16_t off) {
 
 stu_int32_t
 stu_rtmp_amf_set_key(stu_rtmp_amf_t *item, u_char *data, size_t len) {
-	if (data != NULL) {
-		if (item->key.len < len) {
-			if (item->key.data != NULL) {
-				stu_rtmp_amf_free_fn(item->key.data);
-			}
+	if (item->key.data != NULL) {
+		stu_rtmp_amf_free_fn(item->key.data);
+	}
 
-			item->key.data = (u_char *) stu_rtmp_amf_malloc_fn(len + 1);
-			if (item->key.data == NULL) {
-				return STU_ERROR;
-			}
+	if (data && len) {
+		item->key.data = (u_char *) stu_rtmp_amf_malloc_fn(len + 1);
+		if (item->key.data == NULL) {
+			return STU_ERROR;
 		}
 
 		stu_strncpy(item->key.data, data, len);

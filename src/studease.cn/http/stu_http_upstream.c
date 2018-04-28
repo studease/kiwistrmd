@@ -1,7 +1,7 @@
 /*
  * stu_http_upstream.c
  *
- *  Created on: 2017年11月27日
+ *  Created on: 2017骞�11鏈�27鏃�
  *      Author: Tony Lau
  */
 
@@ -64,7 +64,7 @@ stu_http_upstream_read_handler(stu_event_t *ev) {
 
 again:
 
-	n = recv(pc->fd, pc->buffer.last, pc->buffer.size, 0);
+	n = pc->recv(pc, pc->buffer.last, pc->buffer.size);
 	if (n == -1) {
 		err = stu_errno;
 		if (err == EINTR) {
@@ -140,6 +140,8 @@ stu_http_upstream_write_handler(stu_event_t *ev) {
 
 	//stu_mutex_lock(&pc->lock);
 
+	stu_event_del(pc->write, STU_WRITE_EVENT, 0);
+
 	if (u == NULL || u->peer == NULL
 			|| u->peer->timedout || u->peer->close || u->peer->error || u->peer->destroyed) {
 		goto done;
@@ -150,7 +152,7 @@ stu_http_upstream_write_handler(stu_event_t *ev) {
 		goto failed;
 	}
 
-	n = send(pc->fd, pc->buffer.pos, pc->buffer.last - pc->buffer.pos, 0);
+	n = pc->send(pc, pc->buffer.pos, pc->buffer.last - pc->buffer.pos);
 	if (n == -1) {
 		pc->error = TRUE;
 		stu_log_error(stu_errno, "Failed to send http upstream request, u->fd=%d.", pc->fd);
@@ -158,8 +160,6 @@ stu_http_upstream_write_handler(stu_event_t *ev) {
 	}
 
 	stu_log_debug(4, "sent to http upstream %s: u->fd=%d, bytes=%d.", s->name.data, pc->fd, n);
-
-	stu_event_del(&pc->write, STU_WRITE_EVENT, 0);
 
 	goto done;
 
@@ -436,7 +436,7 @@ stu_http_upstream_read_response_header(stu_http_request_t *pr) {
 
 again:
 
-	n = recv(pc->fd, pr->header_in->last, pr->header_in->end - pr->header_in->last, 0);
+	n = pc->recv(pc, pr->header_in->last, pr->header_in->end - pr->header_in->last);
 	if (n == -1) {
 		err = stu_errno;
 		if (err == EINTR) {
