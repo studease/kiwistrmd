@@ -127,7 +127,7 @@ void
 stu_rtmp_request_read_handler(stu_event_t *ev) {
 	stu_connection_t   *c;
 	stu_rtmp_request_t *r;
-	stu_int32_t         n, err;
+	stu_int32_t         n;
 
 	c = (stu_connection_t *) ev->data;
 
@@ -142,27 +142,19 @@ stu_rtmp_request_read_handler(stu_event_t *ev) {
 	c->buffer.pos = c->buffer.last = c->buffer.start;
 	stu_memzero(c->buffer.start, c->buffer.size);
 
-again:
-
 	n = c->recv(c, c->buffer.last, c->buffer.size);
-	if (n == -1) {
-		err = stu_errno;
-		if (err == EINTR) {
-			stu_log_debug(3, "recv trying again: fd=%d, errno=%d.", c->fd, err);
-			goto again;
-		}
+	if (n == STU_AGAIN) {
+		goto done;
+	}
 
-		if (err == EAGAIN) {
-			stu_log_debug(3, "no data received: fd=%d, errno=%d.", c->fd, err);
-			goto done;
-		}
-
-		stu_log_error(err, "Failed to recv data: fd=%d.", c->fd);
+	if (n == STU_ERROR) {
+		c->error = TRUE;
 		goto failed;
 	}
 
 	if (n == 0) {
-		stu_log_debug(4, "rtmp client has closed connection: fd=%d.", c->fd);
+		stu_log_error(0, "rtmp remote peer prematurely closed connection.");
+		c->close = TRUE;
 		goto failed;
 	}
 
@@ -291,7 +283,6 @@ static ssize_t
 stu_rtmp_read_request_chunk(stu_rtmp_request_t *r) {
 	stu_connection_t *c;
 	ssize_t           n;
-	stu_int32_t       err;
 
 	c = r->connection.conn;
 
@@ -304,33 +295,24 @@ stu_rtmp_read_request_chunk(stu_rtmp_request_t *r) {
 	c->buffer.pos = c->buffer.last = c->buffer.start;
 	stu_memzero(c->buffer.start, c->buffer.size);
 
-again:
-
 	n = c->recv(c, c->buffer.last, c->buffer.size);
-	if (n == -1) {
-		err = stu_errno;
-		if (err == EINTR) {
-			stu_log_debug(4, "recv trying again: fd=%d, errno=%d.", c->fd, err);
-			goto again;
-		}
-
-		if (err == EAGAIN) {
-			stu_log_debug(4, "no data received: fd=%d, errno=%d.", c->fd, err);
-			return STU_AGAIN;
-		}
+	if (n == STU_AGAIN) {
+		return STU_AGAIN;
 	}
 
-	if (n == 0) {
-		c->close = TRUE;
-		stu_log_error(0, "rtmp client prematurely closed connection.");
-	}
-
-	if (n == 0 || n == STU_ERROR) {
+	if (n == STU_ERROR) {
 		c->error = TRUE;
 		return STU_ERROR;
 	}
 
+	if (n == 0) {
+		stu_log_error(0, "rtmp remote peer prematurely closed connection.");
+		c->close = TRUE;
+		return STU_ERROR;
+	}
+
 	c->buffer.last += n;
+	stu_log_debug(4, "recv: fd=%d, bytes=%d.", c->fd, n);
 
 	return n;
 }
@@ -433,21 +415,24 @@ stu_rtmp_process_user_control(stu_rtmp_request_t *r) {
 	buf->pos += 2;
 
 	switch (r->event_type) {
+	case STU_RTMP_EVENT_TYPE_STREAM_BEGIN:
+	case STU_RTMP_EVENT_TYPE_STREAM_EOF:
+	case STU_RTMP_EVENT_TYPE_STREAM_DRY:
+	case STU_RTMP_EVENT_TYPE_STREAM_IS_RECORDED:
+		r->stream_id = stu_endian_32(*(stu_uint32_t *) buf->pos);
+		buf->pos += 4;
+		break;
+
 	case STU_RTMP_EVENT_TYPE_SET_BUFFER_LENGTH:
 		if (buf->last - buf->pos < 8) {
 			stu_log_error(0, "Failed to parse rtmp message of user control: Data not enough.");
 			return STU_ERROR;
 		}
 
+		r->stream_id = stu_endian_32(*(stu_uint32_t *) buf->pos);
 		buf->pos += 4;
-		r->buffer_length = stu_endian_32(*(stu_uint32_t *) buf->pos);
-		/* no break */
 
-	case STU_RTMP_EVENT_TYPE_STREAM_BEGIN:
-	case STU_RTMP_EVENT_TYPE_STREAM_EOF:
-	case STU_RTMP_EVENT_TYPE_STREAM_DRY:
-	case STU_RTMP_EVENT_TYPE_STREAM_IS_RECORDED:
-		r->stream_id = stu_endian_32(*(stu_uint32_t *) buf->pos - 4);
+		r->buffer_length = stu_endian_32(*(stu_uint32_t *) buf->pos);
 		buf->pos += 4;
 		break;
 

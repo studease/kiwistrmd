@@ -7,6 +7,8 @@
 
 #include "stu_event.h"
 
+extern stu_queue_t  stu_freed;
+
 
 stu_fd_t
 stu_event_epoll_create() {
@@ -19,6 +21,7 @@ stu_event_epoll_create() {
 
 	return fd;
 }
+
 
 stu_int32_t
 stu_event_epoll_add(stu_event_t *ev, uint32_t event, stu_uint32_t flags) {
@@ -118,6 +121,60 @@ stu_event_epoll_del(stu_event_t *ev, uint32_t event, stu_uint32_t flags) {
 	return STU_OK;
 }
 
+stu_int_t
+stu_event_epoll_add_connection(stu_connection_t *c) {
+	struct epoll_event  ee;
+
+	ee.events = EPOLLIN|EPOLLOUT|EPOLLET|EPOLLRDHUP;
+	ee.data.ptr = (void *) c;
+
+	stu_log_debug(2, "epoll add connection: fd=%d, ev=%X.", c->fd, ee.events);
+
+	if (epoll_ctl(ep, EPOLL_CTL_ADD, c->fd, &ee) == -1) {
+		stu_log_error(stu_errno, "epoll_ctl(EPOLL_CTL_ADD, %d) failed.", c->fd);
+		return STU_ERROR;
+	}
+
+	c->read->active = TRUE;
+	c->write->active = TRUE;
+
+	return STU_OK;
+}
+
+stu_int_t
+stu_event_epoll_del_connection(stu_connection_t *c, stu_uint32_t flags) {
+	int                 op;
+	struct epoll_event  ee;
+
+	/*
+	 * when the file descriptor is closed the epoll automatically deletes
+	 * it from its queue so we do not need to delete explicitly the event
+	 * before the closing the file descriptor
+	 */
+	if (flags & STU_CLOSE_EVENT) {
+		c->read->active = FALSE;
+		c->write->active = FALSE;
+		return STU_OK;
+	}
+
+	stu_log_debug(3, "epoll del connection: fd=%d.", c->fd);
+
+	op = EPOLL_CTL_DEL;
+	ee.events = 0;
+	ee.data.ptr = NULL;
+
+	if (epoll_ctl(ep, op, c->fd, &ee) == -1) {
+		stu_log_error(stu_errno, "epoll_ctl(%d, %d) failed.", op, c->fd);
+		return STU_ERROR;
+	}
+
+	c->read->active = FALSE;
+	c->write->active = FALSE;
+
+	return STU_OK;
+}
+
+
 stu_int32_t
 stu_event_epoll_process_events(stu_fd_t evfd, stu_msec_t timer, stu_uint32_t flags) {
 	stu_connection_t   *c;
@@ -149,6 +206,15 @@ stu_event_epoll_process_events(stu_fd_t evfd, stu_msec_t timer, stu_uint32_t fla
 		if ((ev->events & EPOLLOUT) && c->write->active) {
 			c->write->handler(&c->write);
 		}
+	}
+
+	for (q = stu_queue_head(&stu_freed); q != stu_queue_sentinel(&stu_freed); q = stu_queue_next(q)) {
+		c = stu_queue_data(q, stu_connection_t, queue);
+
+		q = stu_queue_next(q);
+		stu_queue_remove(q);
+
+		stu_connection_free(c);
 	}
 
 	return STU_OK;

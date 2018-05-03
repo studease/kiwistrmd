@@ -466,6 +466,7 @@ stu_rtmp_parse_url(stu_rtmp_url_t *url, u_char *src, size_t len) {
 				state = sw_port_start;
 				break;
 			case '/':
+				url->port = 1935;
 				state = sw_app_start;
 				break;
 			default:
@@ -552,15 +553,15 @@ stu_rtmp_parse_url(stu_rtmp_url_t *url, u_char *src, size_t len) {
 		/* no break */
 
 	case sw_inst:
-		url->instance.len = last - url->instance.data;
+		if (url->instance.data) {
+			url->instance.len = last - url->instance.data;
+		} else {
+			url->instance = stu_rtmp_definst;
+		}
 		break;
 
 	default:
 		break;
-	}
-
-	if (url->instance.len == 0) {
-		url->instance = stu_rtmp_definst;
 	}
 
 	return STU_OK;

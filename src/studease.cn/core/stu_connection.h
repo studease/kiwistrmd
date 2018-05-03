@@ -15,6 +15,7 @@
 
 struct stu_connection_s {
 	stu_mutex_t      lock;
+	stu_queue_t      queue;
 	stu_pool_t      *pool;
 
 	stu_socket_t     fd;
@@ -40,9 +41,12 @@ struct stu_connection_s {
 	unsigned         destroyed:1;
 };
 
-stu_int32_t       stu_connect(stu_socket_t s, stu_addr_t *addr);
+stu_int32_t       stu_connection_init();
+
+stu_int32_t       stu_connect(stu_connection_t *c, stu_addr_t *addr);
 
 stu_connection_t *stu_connection_get(stu_socket_t s);
 void              stu_connection_close(stu_connection_t *c);
+void              stu_connection_free(stu_connection_t *c);
 
 #endif /* STUDEASE_CN_CORE_STU_CONNECTION_H_ */

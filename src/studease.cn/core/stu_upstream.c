@@ -241,17 +241,10 @@ stu_upstream_init(stu_connection_t *c, stu_upstream_server_t *s) {
 		pc->read->evfd = c->read->evfd;
 		pc->write->evfd = c->write->evfd;
 
-		if (stu_event_add(pc->read, STU_READ_EVENT, STU_CLEAR_EVENT) == STU_ERROR) {
+		if (stu_event_add_conn(pc) == STU_ERROR) {
 			stu_log_error(0, "Failed to add read event of upstream %s, fd=%d.", s->name.data, c->fd);
 			return STU_ERROR;
 		}
-
-#if (!STU_WIN32)
-		if (stu_event_add(pc->write, STU_WRITE_EVENT, STU_CLEAR_EVENT) == STU_ERROR) {
-			stu_log_error(0, "Failed to add write event of upstream %s, fd=%d.", s->name.data, c->fd);
-			return STU_ERROR;
-		}
-#endif
 	}
 
 	return STU_OK;

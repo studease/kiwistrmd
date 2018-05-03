@@ -62,7 +62,7 @@ static stu_str_t  STU_WEBSOCKET_SIGN_KEY = stu_string("258EAFA5-E914-47DA-95CA-C
 void
 stu_http_request_read_handler(stu_event_t *ev) {
 	stu_connection_t *c;
-	stu_int32_t       n, err;
+	stu_int32_t       n;
 
 	c = (stu_connection_t *) ev->data;
 
@@ -77,27 +77,19 @@ stu_http_request_read_handler(stu_event_t *ev) {
 	c->buffer.pos = c->buffer.last = c->buffer.start;
 	stu_memzero(c->buffer.start, c->buffer.size);
 
-again:
-
 	n = c->recv(c, c->buffer.last, c->buffer.size);
-	if (n == -1) {
-		err = stu_errno;
-		if (err == EINTR) {
-			stu_log_debug(3, "recv trying again: fd=%d, errno=%d.", c->fd, err);
-			goto again;
-		}
+	if (n == STU_AGAIN) {
+		goto done;
+	}
 
-		if (err == EAGAIN) {
-			stu_log_debug(3, "no data received: fd=%d, errno=%d.", c->fd, err);
-			goto done;
-		}
-
-		stu_log_error(err, "Failed to recv data: fd=%d.", c->fd);
+	if (n == STU_ERROR) {
+		c->error = TRUE;
 		goto failed;
 	}
 
 	if (n == 0) {
-		stu_log_debug(4, "http client has closed connection: fd=%d.", c->fd);
+		stu_log_error(0, "http remote peer prematurely closed connection.");
+		c->close = TRUE;
 		goto failed;
 	}
 
@@ -378,7 +370,6 @@ static ssize_t
 stu_http_read_request_header(stu_http_request_t *r) {
 	stu_connection_t *c;
 	ssize_t           n;
-	stu_int32_t       err;
 
 	c = r->connection;
 
@@ -388,32 +379,24 @@ stu_http_read_request_header(stu_http_request_t *r) {
 		return n;
 	}
 
-again:
-
 	n = c->recv(c, r->header_in->last, r->header_in->end - r->header_in->last);
-	if (n == -1) {
-		err = stu_errno;
-		if (err == EINTR) {
-			stu_log_debug(4, "recv trying again: fd=%d, errno=%d.", c->fd, err);
-			goto again;
-		}
-
-		if (err == EAGAIN) {
-			stu_log_debug(4, "no data received: fd=%d, errno=%d.", c->fd, err);
-		}
+	if (n == STU_AGAIN) {
+		return STU_AGAIN;
 	}
 
-	if (n == 0) {
-		c->close = TRUE;
-		stu_log_error(0, "http client prematurely closed connection.");
-	}
-
-	if (n == 0 || n == STU_ERROR) {
+	if (n == STU_ERROR) {
 		c->error = TRUE;
 		return STU_ERROR;
 	}
 
+	if (n == 0) {
+		stu_log_error(0, "http remote peer prematurely closed connection.");
+		c->close = TRUE;
+		return STU_ERROR;
+	}
+
 	r->header_in->last += n;
+	stu_log_debug(4, "recv: fd=%d, bytes=%d.", c->fd, n);
 
 	return n;
 }

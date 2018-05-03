@@ -86,14 +86,14 @@ typedef struct {
 #define stu_file_delete(name)     unlink((const char *) name)
 #define stu_file_delete_n        "unlink()"
 
-ssize_t stu_file_read(stu_file_t *file, u_char *buf, size_t size, off_t offset);
+ssize_t stu_file_read(stu_file_t *file, u_char *buf, size_t size, stu_off_t offset);
 #if (STU_HAVE_PREAD)
 #define stu_file_read_n          "pread()"
 #else
 #define stu_file_read_n          "read()"
 #endif
 
-ssize_t stu_file_write(stu_file_t *file, u_char *buf, size_t size, off_t offset);
+ssize_t stu_file_write(stu_file_t *file, u_char *buf, size_t size, stu_off_t offset);
 
 #define stu_read_fd               read
 #define stu_read_fd_n            "read()"

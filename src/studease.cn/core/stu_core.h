@@ -73,6 +73,8 @@ __extension__
 typedef unsigned long long int stu_uint64_t;
 #endif
 
+typedef __int64                stu_off_t;
+
 typedef double                 stu_double_t;
 typedef unsigned char          stu_bool_t;
 

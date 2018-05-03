@@ -26,20 +26,10 @@ typedef struct {
 
 struct stu_event_s {
 	unsigned              active:1;
-	/* the ready event; in aio mode 0 means that no operation can be posted */
-	unsigned              ready:1;
-	/* aio operation is complete */
-	unsigned              complete:1;
-    unsigned              eof:1;
     unsigned              error:1;
 	unsigned              timedout:1;
 	unsigned              timer_set:1;
 	unsigned              cancelable:1;
-
-#if (STU_WIN32)
-	/* setsockopt(SO_UPDATE_ACCEPT_CONTEXT) was successful */
-	unsigned              accept_context_updated:1;
-#endif
 
 #if (STU_HAVE_KQUEUE)
 	unsigned              kq_vnode:1;
@@ -64,9 +54,6 @@ struct stu_event_s {
 
 	stu_rbtree_node_t     timer;
 	stu_uint32_t          fails;
-
-	/* the posted queue */
-	stu_queue_t           queue;
 };
 
 typedef struct {
@@ -74,6 +61,8 @@ typedef struct {
 
 	stu_int32_t         (*add)(stu_event_t *ev, uint32_t event, stu_uint32_t flags);
 	stu_int32_t         (*del)(stu_event_t *ev, uint32_t event, stu_uint32_t flags);
+	stu_int32_t         (*add_conn)(stu_connection_t *c);
+	stu_int32_t         (*del_conn)(stu_connection_t *c, stu_uint32_t flags);
 
 	stu_int32_t         (*process_events)(stu_fd_t evfd, stu_msec_t timer, stu_uint32_t flags);
 } stu_event_actions_t;
@@ -83,6 +72,8 @@ extern stu_event_actions_t        stu_event_actions;
 #define stu_event_create          stu_event_actions.create
 #define stu_event_add             stu_event_actions.add
 #define stu_event_del             stu_event_actions.del
+#define stu_event_add_conn        stu_event_actions.add_conn
+#define stu_event_del_conn        stu_event_actions.del_conn
 #define stu_event_process_events  stu_event_actions.process_events
 
 

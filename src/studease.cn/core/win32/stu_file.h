@@ -57,10 +57,10 @@ stu_fd_t stu_file_open(u_char *name, u_long mode, u_long create, u_long access);
 #define stu_file_delete(name)       DeleteFile((const char *) name)
 #define stu_file_delete_n          "DeleteFile()"
 
-ssize_t stu_file_read(stu_file_t *file, u_char *buf, size_t size, off_t offset);
+ssize_t stu_file_read(stu_file_t *file, u_char *buf, size_t size,  stu_off_t offset);
 #define stu_read_file_n            "ReadFile()"
 
-ssize_t stu_file_write(stu_file_t *file, u_char *buf, size_t size, off_t offset);
+ssize_t stu_file_write(stu_file_t *file, u_char *buf, size_t size,  stu_off_t offset);
 
 ssize_t stu_read_fd(stu_fd_t fd, void *buf, size_t size);
 #define stu_read_fd_n              "ReadFile()"

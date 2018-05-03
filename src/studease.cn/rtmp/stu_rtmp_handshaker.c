@@ -47,10 +47,32 @@ static stu_int32_t  stu_rtmp_find_challenge(u_char *src, stu_uint8_t scheme);
 static u_char *     stu_rtmp_make_digest(u_char *dst, u_char *src, size_t len, const u_char *key, size_t size);
 
 
+stu_int32_t
+stu_rtmp_handshaker_connect(stu_connection_t *c, stu_addr_t *addr,
+		stu_rtmp_handshaker_handler_pt complete, stu_rtmp_handshaker_handler_pt error) {
+	stu_rtmp_handshaker_t *h;
+
+	h = stu_rtmp_create_handshaker(c);
+	if (h == NULL) {
+		stu_log_error(0, "Failed to create rtmp handshaker: fd=%d.", c->fd);
+		return STU_ERROR;
+	}
+
+	h->type = STU_RTMP_HANDSHAKER_TYPE_CLIENT;
+	h->complete = complete;
+	h->error = error;
+
+	c->request = h;
+
+	return stu_connect(c, addr);
+}
+
+
 void
 stu_rtmp_handshaker_read_handler(stu_event_t *ev) {
-	stu_connection_t *c;
-	stu_int32_t       n, err;
+	stu_connection_t      *c;
+	stu_rtmp_handshaker_t *h;
+	stu_int32_t            n;
 
 	c = (stu_connection_t *) ev->data;
 
@@ -63,27 +85,19 @@ stu_rtmp_handshaker_read_handler(stu_event_t *ev) {
 		c->buffer.size = STU_RTMP_HANDSHAKER_BUFFER_SIZE;
 	}
 
-again:
-
 	n = c->recv(c, c->buffer.last, c->buffer.size);
-	if (n == -1) {
-		err = stu_errno;
-		if (err == EINTR) {
-			stu_log_debug(3, "recv trying again: fd=%d, errno=%d.", c->fd, err);
-			goto again;
-		}
+	if (n == STU_AGAIN) {
+		goto done;
+	}
 
-		if (err == EAGAIN) {
-			stu_log_debug(3, "no data received: fd=%d, errno=%d.", c->fd, err);
-			goto done;
-		}
-
-		stu_log_error(err, "Failed to recv data: fd=%d.", c->fd);
+	if (n == STU_ERROR) {
+		c->error = TRUE;
 		goto failed;
 	}
 
 	if (n == 0) {
-		stu_log_debug(4, "rtmp handshake peer has closed connection: fd=%d.", c->fd);
+		stu_log_error(0, "rtmp remote peer prematurely closed connection.");
+		c->close = TRUE;
 		goto failed;
 	}
 
@@ -115,6 +129,13 @@ again:
 
 failed:
 
+	if (c->request) {
+		h = c->request;
+		if (h->type == STU_RTMP_HANDSHAKER_TYPE_CLIENT && h->error) {
+			h->error(h);
+		}
+	}
+
 	stu_connection_close(c);
 
 done:
@@ -131,7 +152,7 @@ stu_rtmp_create_handshaker(stu_connection_t *c) {
 	if (c->request == NULL) {
 		h = stu_pcalloc(c->pool, sizeof(stu_rtmp_handshaker_t));
 		if (h == NULL) {
-			stu_log_error(0, "Failed to create rtmp handshake.");
+			stu_log_error(0, "Failed to create rtmp handshaker.");
 			return NULL;
 		}
 	} else {
@@ -192,42 +213,27 @@ static ssize_t
 stu_rtmp_read_handshaker(stu_rtmp_handshaker_t *h) {
 	stu_connection_t *c;
 	ssize_t           n;
-	stu_int32_t       err;
 
 	c = h->connection;
 
-	n = c->buffer.last - c->buffer.pos;
-	if (n > 0) {
-		/* buffer remains */
-		return n;
-	}
-
-again:
-
 	n = c->recv(c, c->buffer.last, c->buffer.end - c->buffer.last);
-	if (n == -1) {
-		err = stu_errno;
-		if (err == EINTR) {
-			stu_log_debug(4, "recv trying again: fd=%d, errno=%d.", c->fd, err);
-			goto again;
-		}
-
-		if (err == EAGAIN) {
-			stu_log_debug(4, "no data received: fd=%d, errno=%d.", c->fd, err);
-		}
+	if (n == STU_AGAIN) {
+		return STU_AGAIN;
 	}
 
-	if (n == 0) {
-		c->close = TRUE;
-		stu_log_error(0, "rtmp handshake peer prematurely closed connection.");
-	}
-
-	if (n == 0 || n == STU_ERROR) {
+	if (n == STU_ERROR) {
 		c->error = TRUE;
 		return STU_ERROR;
 	}
 
+	if (n == 0) {
+		stu_log_error(0, "rtmp remote peer prematurely closed connection.");
+		c->close = TRUE;
+		return STU_ERROR;
+	}
+
 	c->buffer.last += n;
+	stu_log_debug(4, "recv: fd=%d, bytes=%d.", c->fd, n);
 
 	return n;
 }
@@ -266,13 +272,6 @@ stu_rtmp_handshaker_write_handler(stu_event_t *ev) {
 	n = c->send(c, tmp, STU_RTMP_HANDSHAKER_C0C1_SIZE);
 	if (n == -1) {
 		stu_log_error(stu_errno, "Failed to send rtmp handshake packet C0 & C1.");
-	}
-
-	WSABUF  buf = { 0, NULL };
-	DWORD   bytes = 0, flags = 0;
-
-	if (WSARecv(c->fd, &buf, 1, &bytes, &flags, &c->read->ovlp.ovlp, NULL) == STU_ERROR) {
-		stu_log_error(stu_errno, "WSARecv() failed.");
 	}
 
 	//stu_mutex_unlock(&c->lock);
@@ -385,14 +384,6 @@ stu_rtmp_finalize_handshaker(stu_rtmp_handshaker_t *h, stu_int32_t rc) {
 
 		c->read->handler = stu_rtmp_request_read_handler;
 		c->write->handler = NULL;
-
-		stu_event_del(c->read, STU_READ_EVENT, 0);
-		stu_event_del(c->write, STU_WRITE_EVENT, 0);
-
-		if (stu_event_add(c->read, STU_READ_EVENT, STU_CLEAR_EVENT) == STU_ERROR) {
-			stu_log_error(0, "Failed to add rtmp request read event.");
-			return;
-		}
 
 		if (h->type == STU_RTMP_HANDSHAKER_TYPE_CLIENT && h->complete) {
 			h->complete(h);

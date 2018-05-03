@@ -14,7 +14,7 @@
 #ifndef __MINGW64_VERSION_MAJOR
 
 /* Windows defines off_t as long, which is 32-bit */
-typedef __int64             off_t;
+typedef __int64   off_t;
 #define _OFF_T_DEFINED
 
 #endif
@@ -34,9 +34,12 @@ extern char          stu_unique[];
 
 stu_int32_t  stu_os_init();
 
-ssize_t      stu_wsarecv(stu_connection_t *c, u_char *buf, size_t size);
 ssize_t      stu_wsasend(stu_connection_t *c, u_char *buf, size_t size);
-
+ssize_t      stu_wsarecv(stu_connection_t *c, u_char *buf, size_t size);
 ssize_t      stu_udp_wsarecv(stu_connection_t *c, u_char *buf, size_t size);
+
+ssize_t      stu_overlapped_wsasend(stu_connection_t *c, u_char *buf, size_t size);
+ssize_t      stu_overlapped_wsarecv(stu_connection_t *c, u_char *buf, size_t size);
+ssize_t      stu_udp_overlapped_wsarecv(stu_connection_t *c, u_char *buf, size_t size);
 
 #endif /* STUDEASE_CN_CORE_WIN32_STU_OS_H_ */

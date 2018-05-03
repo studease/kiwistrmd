@@ -50,7 +50,7 @@ failed:
 }
 
 ssize_t
-stu_file_read(stu_file_t *file, u_char *buf, size_t size, off_t offset) {
+stu_file_read(stu_file_t *file, u_char *buf, size_t size,  stu_off_t offset) {
 	OVERLAPPED *povlp, ovlp;
 	u_long      n;
 	stu_err_t   err;
@@ -79,7 +79,7 @@ stu_file_read(stu_file_t *file, u_char *buf, size_t size, off_t offset) {
 }
 
 ssize_t
-stu_file_write(stu_file_t *file, u_char *buf, size_t size, off_t offset) {
+stu_file_write(stu_file_t *file, u_char *buf, size_t size,  stu_off_t offset) {
 	OVERLAPPED *povlp, ovlp;
 	u_long      n;
 

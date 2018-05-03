@@ -346,12 +346,14 @@ stu_rtmp_amf_t *
 stu_rtmp_amf_get_array_item_at(stu_rtmp_amf_t *array, stu_int32_t index) {
 	stu_rtmp_amf_t *item;
 
-	if (array == NULL) {
+	if (array == NULL || index < 0) {
 		return NULL;
 	}
 
-	for (item = (stu_rtmp_amf_t *) array->value; item && index; item = item->next, index--) {
-		/* void */
+	for (item = (stu_rtmp_amf_t *) array->value; item; item = item->next) {
+		if (index-- == 0) {
+			return item;
+		}
 	}
 
 	return item;
@@ -418,7 +420,7 @@ stu_rtmp_amf_remove_item_from_object(stu_rtmp_amf_t *object, stu_str_t *key) {
 
 void
 stu_rtmp_amf_delete(stu_rtmp_amf_t *item) {
-	stu_rtmp_amf_t *child;
+	stu_rtmp_amf_t *child, *next;
 	stu_str_t      *str;
 
 	if (item == NULL) {
@@ -444,8 +446,10 @@ stu_rtmp_amf_delete(stu_rtmp_amf_t *item) {
 	case STU_RTMP_AMF_OBJECT:
 	case STU_RTMP_AMF_ECMA_ARRAY:
 	case STU_RTMP_AMF_STRICT_ARRAY:
-		for (child = (stu_rtmp_amf_t *) item->value; child; child = child->next) {
+		for (child = (stu_rtmp_amf_t *) item->value; child; /* void */) {
+			next = child->next;
 			stu_rtmp_amf_delete(child);
+			child = next;
 		}
 		break;
 

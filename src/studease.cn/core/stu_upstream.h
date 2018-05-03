@@ -27,9 +27,8 @@ typedef struct {
 
 	stu_str_t     name;
 	stu_addr_t    addr;
-#if (STU_LINUX)
-	in_port_t     port;
-#endif
+	uint16_t      port;
+
 	stu_uint32_t  weight;
 	time_t        timeout;
 	stu_uint32_t  max_fails;

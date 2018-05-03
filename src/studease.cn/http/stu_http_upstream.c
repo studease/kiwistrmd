@@ -45,7 +45,7 @@ stu_http_upstream_read_handler(stu_event_t *ev) {
 	stu_connection_t      *pc;
 	stu_upstream_t        *u;
 	stu_upstream_server_t *s;
-	stu_int32_t            n, err;
+	stu_int32_t            n;
 
 	pc = ev->data;
 	u = pc->upstream;
@@ -62,27 +62,19 @@ stu_http_upstream_read_handler(stu_event_t *ev) {
 	pc->buffer.pos = pc->buffer.last = pc->buffer.start;
 	stu_memzero(pc->buffer.start, pc->buffer.size);
 
-again:
-
 	n = pc->recv(pc, pc->buffer.last, pc->buffer.size);
-	if (n == -1) {
-		err = stu_errno;
-		if (err == EINTR) {
-			stu_log_debug(3, "recv trying again: fd=%d, errno=%d.", pc->fd, err);
-			goto again;
-		}
+	if (n == STU_AGAIN) {
+		goto done;
+	}
 
-		if (err == EAGAIN) {
-			stu_log_debug(3, "no data received: fd=%d, errno=%d.", pc->fd, err);
-			goto done;
-		}
-
-		stu_log_error(err, "Failed to recv data: fd=%d.", pc->fd);
+	if (n == STU_ERROR) {
+		pc->error = TRUE;
 		goto failed;
 	}
 
 	if (n == 0) {
-		stu_log_debug(4, "http upstream has closed connection: fd=%d.", pc->fd);
+		stu_log_error(0, "http remote peer prematurely closed connection.");
+		pc->close = TRUE;
 		goto failed;
 	}
 
@@ -422,11 +414,14 @@ stu_http_upstream_process_response_headers(stu_event_t *ev) {
 
 static ssize_t
 stu_http_upstream_read_response_header(stu_http_request_t *pr) {
-	stu_connection_t *pc;
-	ssize_t           n;
-	stu_int32_t       err;
+	stu_connection_t      *pc;
+	stu_upstream_t        *u;
+	stu_upstream_server_t *s;
+	ssize_t                n;
 
 	pc = pr->connection;
+	u = pc->upstream;
+	s = u->server;
 
 	n = pr->header_in->last - pr->header_in->pos;
 	if (n > 0) {
@@ -434,33 +429,24 @@ stu_http_upstream_read_response_header(stu_http_request_t *pr) {
 		return n;
 	}
 
-again:
-
 	n = pc->recv(pc, pr->header_in->last, pr->header_in->end - pr->header_in->last);
-	if (n == -1) {
-		err = stu_errno;
-		if (err == EINTR) {
-			stu_log_debug(3, "recv trying again: fd=%d, errno=%d.", pc->fd, err);
-			goto again;
-		}
+	if (n == STU_AGAIN) {
+		return STU_AGAIN;
+	}
 
-		if (err == EAGAIN) {
-			stu_log_debug(3, "no data received: fd=%d, errno=%d.", pc->fd, err);
-		}
+	if (n == STU_ERROR) {
+		pc->error = TRUE;
+		return STU_ERROR;
 	}
 
 	if (n == 0) {
-		pc->close = TRUE;
 		stu_log_error(0, "http upstream prematurely closed connection.");
-	}
-
-	if (n == 0 || n == STU_ERROR) {
-		pc->error = TRUE;
-		stu_http_finalize_request(pc->upstream->connection->request, STU_HTTP_BAD_GATEWAY);
+		pc->close = TRUE;
 		return STU_ERROR;
 	}
 
 	pr->header_in->last += n;
+	stu_log_debug(4, "upstream recv from %s: fd=%d, bytes=%d.", s->name.data, pc->fd, n);
 
 	return n;
 }

@@ -94,7 +94,7 @@ stu_rtmp_connect(stu_rtmp_connection_t *nc, u_char *url, size_t len, stu_rtmp_re
 	ao_cmd = stu_rtmp_amf_create_string(NULL, STU_RTMP_CMD_CONNECT.data, STU_RTMP_CMD_CONNECT.len);
 	ao_tran = stu_rtmp_amf_create_number(NULL, nc->transaction_id++);
 	ao_prop = stu_rtmp_amf_create_object(NULL);
-	ao_args = stu_rtmp_amf_create_object(NULL);
+	ao_args = NULL;
 
 	ao_item = stu_rtmp_amf_create_string((stu_str_t *) &STU_RTMP_KEY_APP, nc->url.application.data, nc->url.application.len);
 	stu_rtmp_amf_add_item_to_object(ao_prop, ao_item);
@@ -126,6 +126,10 @@ stu_rtmp_connect(stu_rtmp_connection_t *nc, u_char *url, size_t len, stu_rtmp_re
 	va_start(args, res);
 
 	for (ao_item = va_arg(args, stu_rtmp_amf_t *); ao_item != NULL; /* void */) {
+		if (ao_args == NULL) {
+			ao_args = stu_rtmp_amf_create_object(NULL);
+		}
+
 		stu_rtmp_amf_add_item_to_object(ao_args, ao_item);
 	}
 
@@ -134,7 +138,9 @@ stu_rtmp_connect(stu_rtmp_connection_t *nc, u_char *url, size_t len, stu_rtmp_re
 	pos = stu_rtmp_amf_stringify(pos, ao_cmd);
 	pos = stu_rtmp_amf_stringify(pos, ao_tran);
 	pos = stu_rtmp_amf_stringify(pos, ao_prop);
-	pos = stu_rtmp_amf_stringify(pos, ao_args);
+	if (ao_args) {
+		pos = stu_rtmp_amf_stringify(pos, ao_args);
+	}
 
 	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND, 0, STU_RTMP_MESSAGE_TYPE_COMMAND, 0, tmp, pos - tmp);
 	if (rc == STU_ERROR) {
@@ -663,18 +669,29 @@ done:
 stu_int32_t
 stu_rtmp_on_result(stu_rtmp_request_t *r) {
 	stu_rtmp_connection_t *nc;
-	stu_rtmp_responder_t  *responder;
+	stu_rtmp_responder_t  *res;
+	u_char                 tmp[10];
+	stu_str_t              key;
+	stu_uint32_t           hk;
 
 	nc = &r->connection;
+	stu_memzero(tmp, 10);
 
-	responder = stu_hash_find_locked(&nc->responders, r->transaction_id, (u_char *) &nc->transaction_id, 4);
-	if (responder) {
-		if (responder->result) {
-			responder->result(r);
+	key.data = tmp;
+	key.len = stu_sprintf(tmp, "%u", r->transaction_id) - tmp;
+
+	hk = stu_hash_key(key.data, key.len, nc->responders.flags);
+
+	res = stu_hash_find_locked(&nc->responders, hk, key.data, key.len);
+	if (res) {
+		if (res->result) {
+			res->result(r);
 		}
 
-		stu_hash_remove_locked(&nc->responders, r->transaction_id, (u_char *) &nc->transaction_id, 4);
-		stu_free(responder);
+		if (nc->responders.destroyed == FALSE) {
+			stu_hash_remove_locked(&nc->responders, hk, key.data, key.len);
+			stu_free(res);
+		}
 	}
 
 	return STU_OK;
@@ -683,18 +700,27 @@ stu_rtmp_on_result(stu_rtmp_request_t *r) {
 stu_int32_t
 stu_rtmp_on_error(stu_rtmp_request_t *r) {
 	stu_rtmp_connection_t *nc;
-	stu_rtmp_responder_t  *responder;
+	stu_rtmp_responder_t  *res;
+	u_char                 tmp[10];
+	stu_str_t              key;
+	stu_uint32_t           hk;
 
 	nc = &r->connection;
+	stu_memzero(tmp, 10);
 
-	responder = stu_hash_find_locked(&nc->responders, r->transaction_id, (u_char *) &nc->transaction_id, 4);
-	if (responder) {
-		if (responder->status) {
-			responder->status(r);
+	key.data = tmp;
+	key.len = stu_sprintf(tmp, "%u", r->transaction_id) - tmp;
+
+	hk = stu_hash_key(key.data, key.len, nc->responders.flags);
+
+	res = stu_hash_find_locked(&nc->responders, hk, key.data, key.len);
+	if (res) {
+		if (res->status) {
+			res->status(r);
 		}
 
-		stu_hash_remove_locked(&nc->responders, r->transaction_id, (u_char *) &nc->transaction_id, 4);
-		stu_free(responder);
+		stu_hash_remove_locked(&nc->responders, hk, key.data, key.len);
+		stu_free(res);
 	}
 
 	return STU_OK;

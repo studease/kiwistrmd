@@ -150,7 +150,7 @@ stu_unix_recv(stu_connection_t *c, u_char *buf, size_t size) {
 		err = stu_socket_errno;
 
 		if (err == STU_EAGAIN || err == STU_EINTR) {
-			stu_log_error(err, "recv() not ready");
+			stu_log_debug(3, "recv() not ready");
 			n = STU_AGAIN;
 		} else {
 			stu_log_error(err, "recv() failed");
