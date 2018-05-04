@@ -36,6 +36,7 @@ typedef DWORD                      stu_err_t;
 #define STU_EISDIR                 ERROR_CANNOT_MAKE
 #define STU_ENOSPC                 ERROR_DISK_FULL
 #define STU_EPIPE                  EPIPE
+#define STU_EINTR                  WSAEINTR
 #define STU_EAGAIN                 WSAEWOULDBLOCK
 #define STU_EINPROGRESS            WSAEINPROGRESS
 #define STU_ENOPROTOOPT            WSAENOPROTOOPT

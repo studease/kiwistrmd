@@ -8,7 +8,7 @@
 #include "../stu_config.h"
 #include "stu_core.h"
 
-stu_uint8_t  STU_DEBUG = 4;
+stu_uint8_t  STU_DEBUG = 3;
 
 static stu_file_t *stu_logger = NULL;
 

@@ -30,7 +30,7 @@ stu_upstream_read_handler(stu_event_t *ev) {
 	stu_connection_t      *pc;
 	stu_upstream_t        *u;
 	stu_upstream_server_t *s;
-	stu_int32_t            n, err;
+	stu_int32_t            n;
 
 	pc = ev->data;
 	u = pc->upstream;
@@ -51,32 +51,25 @@ stu_upstream_read_handler(stu_event_t *ev) {
 		pc->buffer.end = pc->buffer.start + STU_UPSTREAM_BUFFER_DEFAULT_SIZE;
 		pc->buffer.size = STU_UPSTREAM_BUFFER_DEFAULT_SIZE;
 	}
-	pc->buffer.pos = pc->buffer.last = pc->buffer.start;
-	stu_memzero(pc->buffer.start, pc->buffer.size);
 
-again:
+	if (pc->buffer.end == pc->buffer.last) {
+		pc->buffer.pos = pc->buffer.last = pc->buffer.start;
+		stu_memzero(pc->buffer.start, pc->buffer.size);
+	}
 
 	n = pc->recv(pc, pc->buffer.start, pc->buffer.size);
-	if (n == -1) {
-		err = stu_errno;
-		if (err == EAGAIN) {
-			stu_log_debug(3, "no data received: fd=%d, errno=%d.", pc->fd, err);
-			goto done;
-		}
+	if (n == STU_AGAIN) {
+		goto done;
+	}
 
-		if (err == EINTR) {
-			stu_log_debug(3, "recv trying again: fd=%d, errno=%d.", pc->fd, err);
-			goto again;
-		}
-
+	if (n == STU_ERROR) {
 		pc->error = TRUE;
-		stu_log_error(err, "Failed to recv data: fd=%d.", pc->fd);
 		goto failed;
 	}
 
 	if (n == 0) {
+		stu_log_error(0, "upstream peer prematurely closed connection.");
 		pc->close = TRUE;
-		stu_log_debug(4, "upstream peer has closed connection: fd=%d.", pc->fd);
 		goto failed;
 	}
 

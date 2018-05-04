@@ -34,6 +34,9 @@ extern char          stu_unique[];
 
 stu_int32_t  stu_os_init();
 
+ssize_t      stu_win32_send(stu_connection_t *c, u_char *buf, size_t size);
+ssize_t      stu_win32_recv(stu_connection_t *c, u_char *buf, size_t size);
+
 ssize_t      stu_wsasend(stu_connection_t *c, u_char *buf, size_t size);
 ssize_t      stu_wsarecv(stu_connection_t *c, u_char *buf, size_t size);
 ssize_t      stu_udp_wsarecv(stu_connection_t *c, u_char *buf, size_t size);

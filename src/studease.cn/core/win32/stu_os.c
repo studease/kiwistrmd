@@ -12,9 +12,9 @@ stu_uint32_t      stu_ncpu;
 char              stu_unique[STU_INT32_LEN + 1];
 
 stu_os_io_t       stu_os_io = {
-	stu_wsarecv,
+	stu_win32_recv,
 	stu_udp_wsarecv,
-	stu_wsasend,
+	stu_win32_send,
 	NULL,
 	0
 };
@@ -157,6 +157,85 @@ stu_os_init() {
 	return STU_OK;
 }
 
+
+ssize_t
+stu_win32_send(stu_connection_t *c, u_char *buf, size_t size) {
+	stu_event_t *wev;
+	ssize_t      n;
+	stu_err_t    err;
+
+	wev = c->write;
+
+	for ( ;; ) {
+		n = send(c->fd, (const char *) buf, size, 0);
+
+		stu_log_debug(3, "send: fd=%d, %d of %u.", c->fd, n, size);
+
+		if (n > 0) {
+			return n;
+		}
+
+		err = stu_socket_errno;
+
+		if (n == 0) {
+			stu_log_error(err, "send() returned zero.");
+			return n;
+		}
+
+		if (err == STU_EAGAIN || err == STU_EINTR) {
+			stu_log_error(err, "send() not ready.");
+
+			if (err == STU_EAGAIN) {
+				return STU_AGAIN;
+			}
+		} else {
+			wev->error = 1;
+			return STU_ERROR;
+		}
+	}
+
+	return STU_ERROR;
+}
+
+ssize_t
+stu_win32_recv(stu_connection_t *c, u_char *buf, size_t size) {
+	stu_event_t *rev;
+	ssize_t      n;
+	stu_err_t    err;
+
+	rev = c->read;
+
+	do {
+		n = recv(c->fd, (char *) buf, size, 0);
+
+		stu_log_debug(3, "recv: fd=%d, %d of %u.", c->fd, n, size);
+
+		if (n == 0) {
+			return 0;
+		}
+
+		if (n > 0) {
+			return n;
+		}
+
+		err = stu_socket_errno;
+
+		if (err == STU_EAGAIN || err == STU_EINTR) {
+			stu_log_debug(3, "recv() not ready.");
+			n = STU_AGAIN;
+		} else {
+			stu_log_error(err, "recv() failed.");
+			n = STU_ERROR;
+			break;
+		}
+	} while (err == STU_EINTR);
+
+	if (n == STU_ERROR) {
+		rev->error = 1;
+	}
+
+	return n;
+}
 
 ssize_t
 stu_wsasend(stu_connection_t *c, u_char *buf, size_t size) {

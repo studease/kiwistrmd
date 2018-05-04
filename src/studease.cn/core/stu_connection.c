@@ -121,7 +121,7 @@ stu_connection_get(stu_socket_t s) {
 	c->write->data = (void *) c;
 	c->idle = TRUE;
 
-	stu_log_debug(3, "got connection: c=%p, fd=%d.", c, c->fd);
+	stu_log_debug(3, "got connection: c=0x%p, fd=%d.", c, c->fd);
 
 	return c;
 }
@@ -134,15 +134,15 @@ stu_connection_close(stu_connection_t *c) {
 		stu_log_error(0, "connection already closed.");
 		return;
 	}
-/*
-	if (c->read->timer_set) {
+
+	/*if (c->read->timer_set) {
 		stu_del_timer(c->read);
 	}
 
 	if (c->write->timer_set) {
 		stu_del_timer(c->write);
-	}
-*/
+	}*/
+
 	stu_event_del(c->read, STU_READ_EVENT, STU_CLOSE_EVENT);
 	stu_event_del(c->write, STU_WRITE_EVENT, STU_CLOSE_EVENT);
 
@@ -154,7 +154,7 @@ stu_connection_close(stu_connection_t *c) {
 
 	stu_upstream_cleanup(c);
 
-	stu_log_debug(3, "freed connection: c=%p, fd=%d.", c, fd);
+	stu_log_debug(3, "freed connection: c=0x%p, fd=%d.", c, fd);
 
 	c->destroyed = TRUE;
 	stu_queue_insert_tail(&stu_freed, &c->queue);

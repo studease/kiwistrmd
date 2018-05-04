@@ -85,7 +85,7 @@ stu_rtmp_handshaker_read_handler(stu_event_t *ev) {
 		c->buffer.size = STU_RTMP_HANDSHAKER_BUFFER_SIZE;
 	}
 
-	n = c->recv(c, c->buffer.last, c->buffer.size);
+	n = c->recv(c, c->buffer.last, c->buffer.end - c->buffer.last);
 	if (n == STU_AGAIN) {
 		goto done;
 	}
@@ -190,7 +190,11 @@ stu_rtmp_process_handshaker(stu_event_t *ev) {
 	for ( ;; ) {
 		if (rc == STU_AGAIN) {
 			n = stu_rtmp_read_handshaker(h);
-			if (n == STU_AGAIN || n == STU_ERROR) {
+			if (n == STU_AGAIN) {
+				return;
+			}
+
+			if (n == STU_ERROR) {
 				stu_log_error(0, "rtmp failed to read handshaker buffer.");
 				stu_rtmp_finalize_handshaker(h, STU_ERROR);
 				return;
@@ -199,7 +203,7 @@ stu_rtmp_process_handshaker(stu_event_t *ev) {
 
 		rc = stu_rtmp_parse_handshaker(h, &c->buffer);
 		if (rc == STU_AGAIN) {
-			/* a rtmp handshake is still not complete */
+			stu_log_debug(4, "rtmp handshake parsing is still not complete.");
 			continue;
 		}
 

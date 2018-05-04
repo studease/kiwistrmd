@@ -74,10 +74,13 @@ stu_http_request_read_handler(stu_event_t *ev) {
 		c->buffer.end = c->buffer.start + STU_HTTP_REQUEST_DEFAULT_SIZE;
 		c->buffer.size = STU_HTTP_REQUEST_DEFAULT_SIZE;
 	}
-	c->buffer.pos = c->buffer.last = c->buffer.start;
-	stu_memzero(c->buffer.start, c->buffer.size);
 
-	n = c->recv(c, c->buffer.last, c->buffer.size);
+	if (c->buffer.end == c->buffer.last) {
+		c->buffer.pos = c->buffer.last = c->buffer.start;
+		stu_memzero(c->buffer.start, c->buffer.size);
+	}
+
+	n = c->recv(c, c->buffer.last, c->buffer.end - c->buffer.last);
 	if (n == STU_AGAIN) {
 		goto done;
 	}
@@ -196,7 +199,11 @@ stu_http_process_request_line(stu_event_t *ev) {
 			}
 
 			n = stu_http_read_request_header(r);
-			if (n == STU_AGAIN || n == STU_ERROR) {
+			if (n == STU_AGAIN) {
+				return;
+			}
+
+			if (n == STU_ERROR) {
 				stu_log_error(0, "http failed to read request buffer.");
 				stu_http_finalize_request(r, STU_HTTP_BAD_REQUEST);
 				return;
@@ -221,11 +228,12 @@ stu_http_process_request_line(stu_event_t *ev) {
 
 			//ev->handler = stu_http_process_request_headers;
 			stu_http_process_request_headers(ev);
+
 			return;
 		}
 
 		if (rc == STU_AGAIN) {
-			/* a header line parsing is still not complete */
+			stu_log_debug(4, "a header line parsing is still not complete.");
 			continue;
 		}
 
@@ -287,7 +295,11 @@ stu_http_process_request_headers(stu_event_t *ev) {
 			}
 
 			n = stu_http_read_request_header(r);
-			if (n == STU_AGAIN || n == STU_ERROR) {
+			if (n == STU_AGAIN) {
+				return;
+			}
+
+			if (n == STU_ERROR) {
 				stu_log_error(0, "http failed to read request buffer.");
 				stu_http_finalize_request(r, STU_HTTP_BAD_REQUEST);
 				return;
@@ -334,12 +346,12 @@ stu_http_process_request_headers(stu_event_t *ev) {
 			}
 
 			stu_log_debug(3, "http header => \"%s: %s\".", h->key.data, h->value.data);
+
 			continue;
 		}
 
 		if (rc == STU_DONE) {
-			/* a whole header has been parsed successfully */
-			stu_log_debug(4, "http header done.");
+			stu_log_debug(4, "http header parsed.");
 
 			rc = stu_http_process_request_header(r);
 			if (rc != STU_OK) {
@@ -350,11 +362,16 @@ stu_http_process_request_headers(stu_event_t *ev) {
 
 			stu_http_process_request(r);
 
-			return;
+			if (r->header_in->pos == r->header_in->last) {
+				r->header_in->pos = r->header_in->last = r->header_in->start;
+				rc = STU_AGAIN;
+			}
+
+			continue;
 		}
 
 		if (rc == STU_AGAIN) {
-			/* a header line parsing is still not complete */
+			stu_log_debug(4, "a header line parsing is still not complete.");
 			continue;
 		}
 
@@ -377,6 +394,11 @@ stu_http_read_request_header(stu_http_request_t *r) {
 	if (n > 0) {
 		/* buffer remains */
 		return n;
+	}
+
+	if (r->header_in->end == r->header_in->last) {
+		r->header_in->pos = r->header_in->last = r->header_in->start;
+		stu_memzero(r->header_in->start, r->header_in->size);
 	}
 
 	n = c->recv(c, r->header_in->last, r->header_in->end - r->header_in->last);

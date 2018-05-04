@@ -33,10 +33,13 @@ stu_websocket_request_read_handler(stu_event_t *ev) {
 		c->buffer.end = c->buffer.start + STU_WEBSOCKET_REQUEST_DEFAULT_SIZE;
 		c->buffer.size = STU_WEBSOCKET_REQUEST_DEFAULT_SIZE;
 	}
-	c->buffer.pos = c->buffer.last = c->buffer.start;
-	stu_memzero(c->buffer.start, c->buffer.size);
 
-	n = c->recv(c, c->buffer.last, c->buffer.size);
+	if (c->buffer.end == c->buffer.last) {
+		c->buffer.pos = c->buffer.last = c->buffer.start;
+		stu_memzero(c->buffer.start, c->buffer.size);
+	}
+
+	n = c->recv(c, c->buffer.last, c->buffer.end - c->buffer.last);
 	if (n == STU_AGAIN) {
 		goto done;
 	}
@@ -140,7 +143,11 @@ stu_websocket_process_request_frames(stu_event_t *ev) {
 			}
 
 			n = stu_websocket_read_request_buffer(r);
-			if (n == STU_AGAIN || n == STU_ERROR) {
+			if (n == STU_AGAIN) {
+				return;
+			}
+
+			if (n == STU_ERROR) {
 				stu_log_error(0, "websocket failed to read request buffer.");
 				stu_websocket_finalize_request(r, STU_ERROR);
 				return;
@@ -149,13 +156,12 @@ stu_websocket_process_request_frames(stu_event_t *ev) {
 
 		rc = stu_websocket_parse_frame(r, r->frame_in);
 		if (rc == STU_OK) {
-			/* a inner frame has been parsed successfully */
+			stu_log_debug(4, "a inner frame has been parsed successfully.");
 			continue;
 		}
 
 		if (rc == STU_DONE) {
-			/* a key frame has been parsed successfully */
-			stu_log_debug(4, "websocket key frame done: opcode=%d, len=%d.", r->frames_in.opcode, r->frames_in.payload_data.size);
+			stu_log_debug(4, "websocket key frame parsed: opcode=%d, len=%d.", r->frames_in.opcode, r->frames_in.payload_data.size);
 
 			rc = stu_websocket_process_request_frame(r);
 			if (rc != STU_OK) {
@@ -166,11 +172,16 @@ stu_websocket_process_request_frames(stu_event_t *ev) {
 
 			stu_websocket_process_request(r);
 
-			return;
+			if (r->frame_in->pos == r->frame_in->last) {
+				r->frame_in->pos = r->frame_in->last = r->frame_in->start;
+				rc = STU_AGAIN;
+			}
+
+			continue;
 		}
 
 		if (rc == STU_AGAIN) {
-			/* a websocket frame parsing is still not complete */
+			stu_log_debug(4, "a websocket frame parsing is still not complete.");
 			continue;
 		}
 
@@ -192,6 +203,11 @@ stu_websocket_read_request_buffer(stu_websocket_request_t *r) {
 	if (n > 0) {
 		/* buffer remains */
 		return n;
+	}
+
+	if (r->frame_in->end == r->frame_in->last) {
+		r->frame_in->pos = r->frame_in->last = r->frame_in->start;
+		stu_memzero(r->frame_in->start, r->frame_in->size);
 	}
 
 	n = c->recv(c, r->frame_in->last, r->frame_in->end - r->frame_in->last);

@@ -139,10 +139,13 @@ stu_rtmp_request_read_handler(stu_event_t *ev) {
 		c->buffer.end = c->buffer.start + STU_RTMP_REQUEST_DEFAULT_SIZE;
 		c->buffer.size = STU_RTMP_REQUEST_DEFAULT_SIZE;
 	}
-	c->buffer.pos = c->buffer.last = c->buffer.start;
-	stu_memzero(c->buffer.start, c->buffer.size);
 
-	n = c->recv(c, c->buffer.last, c->buffer.size);
+	if (c->buffer.end == c->buffer.last) {
+		c->buffer.pos = c->buffer.last = c->buffer.start;
+		stu_memzero(c->buffer.start, c->buffer.size);
+	}
+
+	n = c->recv(c, c->buffer.last, c->buffer.end - c->buffer.last);
 	if (n == STU_AGAIN) {
 		goto done;
 	}
@@ -248,7 +251,6 @@ stu_rtmp_process_chunk(stu_event_t *ev) {
 
 		rc = stu_rtmp_parse_chunk(r, &c->buffer);
 		if (rc == STU_OK) {
-			/* a complete message has been parsed successfully */
 			stu_log_debug(4, "rtmp message parsed.");
 
 			rc = stu_rtmp_process_message(r);
@@ -260,15 +262,16 @@ stu_rtmp_process_chunk(stu_event_t *ev) {
 
 			stu_rtmp_process_request(r);
 
-			if (c->buffer.pos < c->buffer.last) {
-				continue;
+			if (c->buffer.pos == c->buffer.last) {
+				c->buffer.pos = c->buffer.last = c->buffer.start;
+				rc = STU_AGAIN;
 			}
 
-			rc = STU_AGAIN;
+			continue;
 		}
 
 		if (rc == STU_AGAIN) {
-			/* a header line parsing is still not complete */
+			stu_log_debug(4, "rtmp message parsing is still not complete.");
 			continue;
 		}
 
@@ -286,16 +289,12 @@ stu_rtmp_read_request_chunk(stu_rtmp_request_t *r) {
 
 	c = r->connection.conn;
 
-	n = c->buffer.last - c->buffer.pos;
-	if (n > 0) {
-		/* buffer remains */
-		return n;
+	if (c->buffer.end == c->buffer.last) {
+		c->buffer.pos = c->buffer.last = c->buffer.start;
+		stu_memzero(c->buffer.start, c->buffer.size);
 	}
 
-	c->buffer.pos = c->buffer.last = c->buffer.start;
-	stu_memzero(c->buffer.start, c->buffer.size);
-
-	n = c->recv(c, c->buffer.last, c->buffer.size);
+	n = c->recv(c, c->buffer.last, c->buffer.end - c->buffer.last);
 	if (n == STU_AGAIN) {
 		return STU_AGAIN;
 	}

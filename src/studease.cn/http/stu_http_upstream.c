@@ -59,8 +59,11 @@ stu_http_upstream_read_handler(stu_event_t *ev) {
 		pc->buffer.end = pc->buffer.start + STU_HTTP_REQUEST_DEFAULT_SIZE;
 		pc->buffer.size = STU_HTTP_REQUEST_DEFAULT_SIZE;
 	}
-	pc->buffer.pos = pc->buffer.last = pc->buffer.start;
-	stu_memzero(pc->buffer.start, pc->buffer.size);
+
+	if (pc->buffer.end == pc->buffer.last) {
+		pc->buffer.pos = pc->buffer.last = pc->buffer.start;
+		stu_memzero(pc->buffer.start, pc->buffer.size);
+	}
 
 	n = pc->recv(pc, pc->buffer.last, pc->buffer.size);
 	if (n == STU_AGAIN) {
@@ -248,8 +251,28 @@ stu_http_upstream_process_status_line(stu_event_t *ev) {
 
 	for ( ;; ) {
 		if (rc == STU_AGAIN) {
+			if (pr->header_in->pos == pr->header_in->end) {
+				rv = stu_http_upstream_alloc_large_header_buffer(pr, TRUE);
+				if (rv == STU_ERROR) {
+					stu_http_finalize_request(r, STU_HTTP_INTERNAL_SERVER_ERROR);
+					return;
+				}
+
+				if (rv == STU_DECLINED) {
+					stu_log_error(0, "http upstream sent too long status.");
+					stu_http_finalize_request(r, STU_HTTP_BAD_GATEWAY);
+					return;
+				}
+			}
+
 			n = stu_http_upstream_read_response_header(pr);
-			if (n == STU_AGAIN || n == STU_ERROR) {
+			if (n == STU_AGAIN) {
+				return;
+			}
+
+			if (n == STU_ERROR) {
+				stu_log_error(0, "http upstream failed to read response buffer.");
+				stu_http_finalize_request(r, STU_HTTP_BAD_GATEWAY);
 				return;
 			}
 		}
@@ -261,26 +284,16 @@ stu_http_upstream_process_status_line(stu_event_t *ev) {
 			return;
 		}
 
-		if (rc != STU_AGAIN) {
-			stu_log_error(0, "Failed to process http status line: Bad Gateway.");
-			stu_http_finalize_request(r, STU_HTTP_BAD_GATEWAY);
-			return;
+		if (rc == STU_AGAIN) {
+			stu_log_debug(4, "a status line parsing is still incomplete.");
+			continue;
+
 		}
 
-		/* STU_AGAIN: a status line parsing is still incomplete */
-		if (pr->header_in->pos == pr->header_in->end) {
-			rv = stu_http_upstream_alloc_large_header_buffer(pr, TRUE);
-			if (rv == STU_ERROR) {
-				stu_http_finalize_request(r, STU_HTTP_INTERNAL_SERVER_ERROR);
-				return;
-			}
+		stu_log_error(0, "Failed to process http status line: %s.", stu_http_status_text(STU_HTTP_BAD_GATEWAY));
+		stu_http_finalize_request(r, STU_HTTP_BAD_GATEWAY);
 
-			if (rv == STU_DECLINED) {
-				stu_log_error(0, "http upstream sent too long status");
-				stu_http_finalize_request(r, STU_HTTP_BAD_GATEWAY);
-				return;
-			}
-		}
+		return;
 	}
 }
 
@@ -330,14 +343,20 @@ stu_http_upstream_process_response_headers(stu_event_t *ev) {
 					}
 
 					stu_log_error(0, "http upstream sent too long header line: \"%s...\"", pr->header_name_start);
-
 					stu_http_finalize_request(r, STU_HTTP_BAD_GATEWAY);
+
 					return;
 				}
 			}
 
 			n = stu_http_upstream_read_response_header(pr);
-			if (n == STU_AGAIN || n == STU_ERROR) {
+			if (n == STU_AGAIN) {
+				return;
+			}
+
+			if (n == STU_ERROR) {
+				stu_log_error(0, "http upstream failed to read response buffer.");
+				stu_http_finalize_request(r, STU_HTTP_BAD_GATEWAY);
 				return;
 			}
 		}
@@ -382,12 +401,12 @@ stu_http_upstream_process_response_headers(stu_event_t *ev) {
 			}
 
 			stu_log_debug(3, "http header => \"%s: %s\"", h->key.data, h->value.data);
+
 			continue;
 		}
 
 		if (rc == STU_DONE) {
-			/* a whole header has been parsed successfully */
-			stu_log_debug(4, "http header done.");
+			stu_log_debug(4, "http header parsed.");
 
 			rc = stu_http_upstream_process_response_header(pr);
 			if (rc != STU_OK) {
@@ -396,18 +415,23 @@ stu_http_upstream_process_response_headers(stu_event_t *ev) {
 
 			pc->upstream->process_response_pt(pc);
 
-			return;
+			if (pr->header_in->pos == pr->header_in->last) {
+				pr->header_in->pos = pr->header_in->last = pr->header_in->start;
+				rc = STU_AGAIN;
+			}
+
+			continue;
 		}
 
 		if (rc == STU_AGAIN) {
-			/* a header line parsing is still not complete */
+			stu_log_debug(4, "a header line parsing is still not complete.");
 			continue;
 		}
 
 		/* rc == STU_HTTP_PARSE_INVALID_HEADER */
 		stu_log_error(0, "http upstream sent invalid header line");
-
 		stu_http_finalize_request(r, STU_HTTP_BAD_GATEWAY);
+
 		return;
 	}
 }
@@ -427,6 +451,11 @@ stu_http_upstream_read_response_header(stu_http_request_t *pr) {
 	if (n > 0) {
 		/* buffer remains */
 		return n;
+	}
+
+	if (pr->header_in->end == pr->header_in->last) {
+		pr->header_in->pos = pr->header_in->last = pr->header_in->start;
+		stu_memzero(pr->header_in->start, pr->header_in->size);
 	}
 
 	n = pc->recv(pc, pr->header_in->last, pr->header_in->end - pr->header_in->last);
