@@ -69,8 +69,10 @@ stu_rtmp_parse_handshaker(stu_rtmp_handshaker_t *h, stu_buf_t *src) {
 			}
 
 			h->random = p;
+			p += STU_RTMP_HANDSHAKER_RANDOM_SIZE;
 
 			if (h->type == STU_RTMP_HANDSHAKER_TYPE_CLIENT) {
+				p--;
 				state = sw_c2_sent;
 				break;
 			}
@@ -106,6 +108,7 @@ stu_rtmp_parse_handshaker(stu_rtmp_handshaker_t *h, stu_buf_t *src) {
 			}
 
 			h->random = p;
+			p += STU_RTMP_HANDSHAKER_RANDOM_SIZE;
 			/* no break */
 
 		case sw_done:
@@ -126,14 +129,14 @@ again:
 
 done:
 
-	src->pos = p + 1;
+	src->pos = p;
 	h->state = sw_c2_sent;
 
 	return STU_OK;
 
 hs_done:
 
-	src->pos = p + 1;
+	src->pos = p;
 	h->state = sw_done;
 
 	return STU_DONE;

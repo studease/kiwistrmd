@@ -48,7 +48,7 @@ static u_char *     stu_rtmp_make_digest(u_char *dst, u_char *src, size_t len, c
 
 
 stu_int32_t
-stu_rtmp_handshaker_connect(stu_connection_t *c, stu_addr_t *addr,
+stu_rtmp_handshake(stu_connection_t *c, stu_addr_t *addr,
 		stu_rtmp_handshaker_handler_pt complete, stu_rtmp_handshaker_handler_pt error) {
 	stu_rtmp_handshaker_t *h;
 
@@ -276,6 +276,7 @@ stu_rtmp_handshaker_write_handler(stu_event_t *ev) {
 	n = c->send(c, tmp, STU_RTMP_HANDSHAKER_C0C1_SIZE);
 	if (n == -1) {
 		stu_log_error(stu_errno, "Failed to send rtmp handshake packet C0 & C1.");
+		stu_rtmp_close_handshaker(c->request);
 	}
 
 	//stu_mutex_unlock(&c->lock);

@@ -49,7 +49,7 @@ struct stu_rtmp_handshaker_s {
 extern stu_str_t  STU_RTMP_HANDSHAKE_COMPLETE;
 extern stu_str_t  STU_RTMP_HANDSHAKE_ERROR;
 
-stu_int32_t  stu_rtmp_handshaker_connect(stu_connection_t *c, stu_addr_t *addr,
+stu_int32_t  stu_rtmp_handshake(stu_connection_t *c, stu_addr_t *addr,
 					stu_rtmp_handshaker_handler_pt complete, stu_rtmp_handshaker_handler_pt error);
 
 void         stu_rtmp_handshaker_read_handler(stu_event_t *ev);

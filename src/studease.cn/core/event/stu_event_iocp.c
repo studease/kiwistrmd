@@ -131,7 +131,7 @@ stu_event_iocp_process_events(stu_fd_t evfd, stu_msec_t timer, stu_uint32_t flag
 	ev = ovlp->event;
 	c = (stu_connection_t *) ev->data;
 
-	stu_log_debug(err, "iocp event: %p.", ev);
+	stu_log_debug(err, "iocp event: c=0x%p, ev=%p.", c, ev);
 
 	if (err == ERROR_NETNAME_DELETED /* the socket was closed */
 		|| err == ERROR_OPERATION_ABORTED /* the operation was canceled */) {
@@ -139,11 +139,12 @@ stu_event_iocp_process_events(stu_fd_t evfd, stu_msec_t timer, stu_uint32_t flag
 		 * the WSA_OPERATION_ABORTED completion notification
 		 * for a file descriptor that was closed
 		 */
-		stu_log_debug(err, "iocp: aborted event %p.", ev);
+		stu_log_debug(err, "iocp event aborted: c=0x%p, ev=%p.", c, ev);
 		return STU_OK;
 	}
 
 	if (err) {
+		c->error = TRUE;
 		stu_log_error(err, "GetQueuedCompletionStatus() returned operation error.");
 	}
 

@@ -327,7 +327,8 @@ stu_rtmp_process_message(stu_rtmp_request_t *r) {
 	ck = r->chunk_in;
 	stu_memzero(tmp, 3);
 
-	stu_log_debug(4, "rtmp message: type=0x%02X.", ck->type_id);
+	stu_log_debug(4, "rtmp message: fmt=%d, csid=0x%02X, ts=%d, type=0x%02X, stream_id=%d, payload=%d.",
+			ck->fmt, ck->csid, ck->timestamp, ck->type_id, ck->stream_id, ck->payload.size);
 
 	key.data = tmp;
 	key.len = stu_sprintf(tmp, "%u", ck->type_id) - tmp;
@@ -336,7 +337,7 @@ stu_rtmp_process_message(stu_rtmp_request_t *r) {
 
 	l = stu_hash_find_locked(&stu_rtmp_message_listener_hash, hk, key.data, key.len);
 	if (l && l->handler) {
-		l->handler(r);
+		return l->handler(r);
 	}
 
 	return STU_OK;
@@ -1604,7 +1605,7 @@ stu_rtmp_on_set_data_frame(stu_rtmp_request_t *r) {
 	ns = stu_hash_find_locked(&nc->streams, hk, key.data, key.len);
 	if (ns) {
 		stu_rtmp_finalize_request(r, STU_DECLINED);
-		return stu_rtmp_set_data_frame(ns, r->data_key, r->data_value);
+		return stu_rtmp_set_data_frame(ns, r->data_key, r->data_value, FALSE);
 	}
 
 	stu_log_error(0, "Failed to set rtmp data frame: %s.", r->data_key->data);
@@ -1633,7 +1634,7 @@ stu_rtmp_on_clear_data_frame(stu_rtmp_request_t *r) {
 	ns = stu_hash_find_locked(&nc->streams, hk, key.data, key.len);
 	if (ns) {
 		stu_rtmp_finalize_request(r, STU_DECLINED);
-		return stu_rtmp_clear_data_frame(ns, r->data_key);
+		return stu_rtmp_clear_data_frame(ns, r->data_key, FALSE);
 	}
 
 	stu_log_error(0, "Failed to clear rtmp data frame: %s.", r->data_key->data);

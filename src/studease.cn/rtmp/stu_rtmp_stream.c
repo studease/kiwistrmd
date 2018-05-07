@@ -383,13 +383,20 @@ stu_rtmp_send_status(stu_rtmp_stream_t *ns, stu_str_t *level, stu_str_t *code, c
 
 
 stu_int32_t
-stu_rtmp_set_data_frame(stu_rtmp_stream_t *ns, stu_str_t *key, stu_rtmp_amf_t *value) {
+stu_rtmp_set_data_frame(stu_rtmp_stream_t *ns, stu_str_t *key, stu_rtmp_amf_t *value, stu_bool_t remote) {
 	stu_rtmp_connection_t *nc;
+	stu_rtmp_amf_t        *ao_hlr, *ao_key;
+	u_char                *pos;
+	u_char                 tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
+	stu_int32_t            rc;
 
 	nc = ns->connection;
+	pos = tmp;
+	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
 
 	if (stu_hash_insert_locked(&ns->data_frames, key, value) == STU_ERROR) {
-		stu_log_error(0, "Failed to set rtmp data frame \"%s\": fd=%d.", key->data, nc->conn->fd);
+		stu_log_error(0, "Failed to %s: fd=%d, key=%s, value=%p.",
+				STU_RTMP_SET_DATA_FRAME.data, nc->conn->fd, key->data, value);
 		return STU_ERROR;
 	}
 
@@ -397,20 +404,50 @@ stu_rtmp_set_data_frame(stu_rtmp_stream_t *ns, stu_str_t *key, stu_rtmp_amf_t *v
 		ns->metadata = value;
 	}
 
-	stu_log_debug(4, "set rtmp data frame \"%s\": fd=%d.", key->data, nc->conn->fd);
+	if (remote == FALSE) {
+		rc = STU_OK;
+		goto done;
+	}
 
-	return STU_OK;
+	ao_hlr = stu_rtmp_amf_create_string(NULL, STU_RTMP_SET_DATA_FRAME.data, STU_RTMP_SET_DATA_FRAME.len);
+	ao_key = stu_rtmp_amf_create_string(NULL, key->data, key->len);
+
+	pos = stu_rtmp_amf_stringify(pos, ao_hlr);
+	pos = stu_rtmp_amf_stringify(pos, ao_key);
+	pos = stu_rtmp_amf_stringify(pos, value);
+
+	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND_2, 0, STU_RTMP_MESSAGE_TYPE_DATA, ns->id, tmp, pos - tmp);
+	if (rc == STU_ERROR) {
+		stu_log_error(0, "Failed to send command \"%s\": fd=%d, key=%s, value=%p.",
+				STU_RTMP_SET_DATA_FRAME.data, nc->conn->fd, key->data, value);
+	}
+
+	stu_rtmp_amf_delete(ao_hlr);
+	stu_rtmp_amf_delete(ao_key);
+
+done:
+
+	if (rc == STU_OK) {
+		stu_log_debug(4, "%s: fd=%d, key=%s.", STU_RTMP_SET_DATA_FRAME.data, nc->conn->fd, key->data);
+	}
+
+	return rc;
 }
 
 stu_int32_t
-stu_rtmp_clear_data_frame(stu_rtmp_stream_t *ns, stu_str_t *key) {
+stu_rtmp_clear_data_frame(stu_rtmp_stream_t *ns, stu_str_t *key, stu_bool_t remote) {
 	stu_rtmp_connection_t *nc;
+	stu_rtmp_amf_t        *ao_hlr, *ao_key;
+	u_char                *pos;
+	u_char                 tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
 	stu_uint32_t           hk;
+	stu_int32_t            rc;
 
 	nc = ns->connection;
+	pos = tmp;
+	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
 
 	hk = stu_hash_key(key->data, key->len, ns->data_frames.flags);
-
 	stu_hash_remove_locked(&ns->data_frames, hk, key->data, key->len);
 
 	if (stu_strncmp(STU_RTMP_ON_META_DATA.data, key->data, key->len) == 0) {
@@ -420,9 +457,63 @@ stu_rtmp_clear_data_frame(stu_rtmp_stream_t *ns, stu_str_t *key) {
 		}
 	}
 
-	stu_log_debug(4, "clear rtmp data frame \"%s\": fd=%d.", key->data, nc->conn->fd);
+	if (remote == FALSE) {
+		rc = STU_OK;
+		goto done;
+	}
+
+	ao_hlr = stu_rtmp_amf_create_string(NULL, STU_RTMP_CLEAR_DATA_FRAME.data, STU_RTMP_CLEAR_DATA_FRAME.len);
+	ao_key = stu_rtmp_amf_create_string(NULL, key->data, key->len);
+
+	pos = stu_rtmp_amf_stringify(pos, ao_hlr);
+	pos = stu_rtmp_amf_stringify(pos, ao_key);
+
+	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND_2, 0, STU_RTMP_MESSAGE_TYPE_DATA, ns->id, tmp, pos - tmp);
+	if (rc == STU_ERROR) {
+		stu_log_error(0, "Failed to send command \"%s\": fd=%d, key=%s.",
+				STU_RTMP_CLEAR_DATA_FRAME.data, nc->conn->fd, key->data);
+	}
+
+	stu_rtmp_amf_delete(ao_hlr);
+	stu_rtmp_amf_delete(ao_key);
+
+done:
+
+	if (rc == STU_OK) {
+		stu_log_debug(4, "%s: fd=%d, key=%s.", STU_RTMP_CLEAR_DATA_FRAME.data, nc->conn->fd, key->data);
+	}
 
 	return STU_OK;
+}
+
+stu_int32_t
+stu_rtmp_send_video_frame(stu_rtmp_stream_t *ns, stu_uint32_t timestamp, u_char *data, size_t len) {
+	stu_rtmp_connection_t *nc;
+	stu_int32_t            rc;
+
+	nc = ns->connection;
+
+	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND_2, timestamp, STU_RTMP_MESSAGE_TYPE_VIDEO, ns->id, data, len);
+	if (rc == STU_ERROR) {
+		stu_log_error(0, "Failed to send video frame: fd=%d, ts=%u.", nc->conn->fd, timestamp);
+	}
+
+	return rc;
+}
+
+stu_int32_t
+stu_rtmp_send_audio_frame(stu_rtmp_stream_t *ns, stu_uint32_t timestamp, u_char *data, size_t len) {
+	stu_rtmp_connection_t *nc;
+	stu_int32_t            rc;
+
+	nc = ns->connection;
+
+	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND_2, timestamp, STU_RTMP_MESSAGE_TYPE_AUDIO, ns->id, data, len);
+	if (rc == STU_ERROR) {
+		stu_log_error(0, "Failed to send audio frame: fd=%d, ts=%u.", nc->conn->fd, timestamp);
+	}
+
+	return rc;
 }
 
 
