@@ -627,7 +627,7 @@ ksd_conf_get_default(ksd_conf_t *conf) {
 	stu_gettimeofday(&tv);
 	stu_localtime(tv.tv_sec, &tm);
 
-	conf->log.name.data = stu_calloc(STU_FILE_PATH_MAX_LEN);
+	conf->log.name.data = stu_calloc(STU_MAX_PATH + 1);
 	if (conf->log.name.data == NULL) {
 		stu_log_error(0, "Failed to calloc log file name.");
 		return STU_ERROR;
@@ -655,7 +655,7 @@ ksd_conf_get_default(ksd_conf_t *conf) {
 	stu_str_null(&conf->cors);
 
 	conf->push_stat = FALSE;
-	conf->push_stat_interval = STU_RTMP_APPLICATION_PUSH_STAT_DEFAULT_INTERVAL * 1000;
+	conf->push_stat_interval = KSD_PUSH_STAT_DEFAULT_INTERVAL * 1000;
 
 	// http
 	conf->http_port = 80;
@@ -663,7 +663,7 @@ ksd_conf_get_default(ksd_conf_t *conf) {
 	stu_str_null(&conf->http_cors);
 
 	// target
-	stu_hash_init(&conf->target, STU_RTMP_UPSTREAM_MAXIMUM, NULL, STU_HASH_FLAGS_LOWCASE|STU_HASH_FLAGS_REPLACE);
+	stu_hash_init(&conf->target, STU_RTMP_UPSTREAM_MAXIMUM, NULL, STU_HASH_FLAGS_LOWCASE);
 
 	// upstream
 	stu_list_init(&conf->ident, NULL);

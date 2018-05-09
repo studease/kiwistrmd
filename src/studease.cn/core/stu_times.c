@@ -1,7 +1,7 @@
 /*
  * stu_times.c
  *
- *  Created on: 2018Äê4ÔÂ26ÈÕ
+ *  Created on: 2018ï¿½ï¿½4ï¿½ï¿½26ï¿½ï¿½
  *      Author: Tony Lau
  */
 
@@ -117,7 +117,7 @@ stu_time_update(void) {
 #elif (STU_HAVE_GMTOFF)
 
 	stu_localtime(sec, &tm);
-	cached_gmtoff = (stu_int_t) (tm.stu_tm_gmtoff / 60);
+	cached_gmtoff = (stu_int32_t) (tm.stu_tm_gmtoff / 60);
 	tp->gmtoff = cached_gmtoff;
 
 #else

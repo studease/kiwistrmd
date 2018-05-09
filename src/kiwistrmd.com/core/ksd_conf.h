@@ -10,7 +10,9 @@
 
 #include "ksd_core.h"
 
-#define KSD_CONF_MAX_SIZE  4096
+#define KSD_CONF_MAX_SIZE              4096
+
+#define KSD_PUSH_STAT_DEFAULT_INTERVAL 300
 
 typedef struct {
 	stu_file_t     log;

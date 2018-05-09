@@ -7,7 +7,7 @@
 
 #include "stu_event.h"
 
-extern stu_queue_t  stu_freed;
+extern stu_queue_t  stu_conn_freed;
 
 
 stu_fd_t
@@ -121,16 +121,19 @@ stu_event_epoll_del(stu_event_t *ev, uint32_t event, stu_uint32_t flags) {
 	return STU_OK;
 }
 
-stu_int_t
+stu_int32_t
 stu_event_epoll_add_connection(stu_connection_t *c) {
+	stu_event_t        *ev;
 	struct epoll_event  ee;
+
+	ev = c->read;
 
 	ee.events = EPOLLIN|EPOLLOUT|EPOLLET|EPOLLRDHUP;
 	ee.data.ptr = (void *) c;
 
 	stu_log_debug(2, "epoll add connection: fd=%d, ev=%X.", c->fd, ee.events);
 
-	if (epoll_ctl(ep, EPOLL_CTL_ADD, c->fd, &ee) == -1) {
+	if (epoll_ctl(ev->evfd, EPOLL_CTL_ADD, c->fd, &ee) == -1) {
 		stu_log_error(stu_errno, "epoll_ctl(EPOLL_CTL_ADD, %d) failed.", c->fd);
 		return STU_ERROR;
 	}
@@ -141,10 +144,13 @@ stu_event_epoll_add_connection(stu_connection_t *c) {
 	return STU_OK;
 }
 
-stu_int_t
+stu_int32_t
 stu_event_epoll_del_connection(stu_connection_t *c, stu_uint32_t flags) {
+	stu_event_t        *ev;
 	int                 op;
 	struct epoll_event  ee;
+
+	ev = c->read;
 
 	/*
 	 * when the file descriptor is closed the epoll automatically deletes
@@ -163,7 +169,7 @@ stu_event_epoll_del_connection(stu_connection_t *c, stu_uint32_t flags) {
 	ee.events = 0;
 	ee.data.ptr = NULL;
 
-	if (epoll_ctl(ep, op, c->fd, &ee) == -1) {
+	if (epoll_ctl(ev->evfd, op, c->fd, &ee) == -1) {
 		stu_log_error(stu_errno, "epoll_ctl(%d, %d) failed.", op, c->fd);
 		return STU_ERROR;
 	}
@@ -178,6 +184,7 @@ stu_event_epoll_del_connection(stu_connection_t *c, stu_uint32_t flags) {
 stu_int32_t
 stu_event_epoll_process_events(stu_fd_t evfd, stu_msec_t timer, stu_uint32_t flags) {
 	stu_connection_t   *c;
+	stu_queue_t        *q;
 	struct epoll_event *ev, events[STU_EPOLL_EVENTS];
 	stu_int32_t         nev, i;
 
@@ -200,15 +207,15 @@ stu_event_epoll_process_events(stu_fd_t evfd, stu_msec_t timer, stu_uint32_t fla
 		}
 
 		if ((ev->events & EPOLLIN) && c->read->active) {
-			c->read->handler(&c->read);
+			c->read->handler(c->read);
 		}
 
 		if ((ev->events & EPOLLOUT) && c->write->active) {
-			c->write->handler(&c->write);
+			c->write->handler(c->write);
 		}
 	}
 
-	for (q = stu_queue_head(&stu_freed); q != stu_queue_sentinel(&stu_freed); q = stu_queue_next(q)) {
+	for (q = stu_queue_head(&stu_conn_freed); q != stu_queue_sentinel(&stu_conn_freed); /* void */) {
 		c = stu_queue_data(q, stu_connection_t, queue);
 
 		q = stu_queue_next(q);

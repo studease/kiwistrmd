@@ -45,5 +45,6 @@ void
 stu_rtmp_instance_cleanup(stu_rtmp_instance_t *inst) {
 	stu_mutex_lock(&inst->lock);
 	stu_hash_destroy_locked(&inst->connections, (stu_hash_cleanup_pt) stu_rtmp_close_connection);
+	stu_hash_destroy_locked(&inst->streams, (stu_hash_cleanup_pt) stu_rtmp_close_stream);
 	stu_mutex_unlock(&inst->lock);
 }

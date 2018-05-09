@@ -167,11 +167,11 @@ void         stu_event_process_events_and_timers(stu_fd_t evfd);
 
 
 #if (STU_WIN32)
-#include "stu_event_iocp.h"
+#include "../event/stu_event_iocp.h"
 #elif (STU_HAVE_KQUEUE)
-#include "stu_event_kqueue.h"
+#include "../event/stu_event_kqueue.h"
 #else
-#include "stu_event_epoll.h"
+#include "../event/stu_event_epoll.h"
 #endif
 
 #endif /* STUDEASE_CN_CORE_EVENT_STU_EVENT_H_ */

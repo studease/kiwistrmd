@@ -17,8 +17,8 @@ stu_fd_t     stu_event_epoll_create();
 
 stu_int32_t  stu_event_epoll_add(stu_event_t *ev, uint32_t event, stu_uint32_t flags);
 stu_int32_t  stu_event_epoll_del(stu_event_t *ev, uint32_t event, stu_uint32_t flags);
-stu_int_t    stu_event_epoll_add_connection(stu_connection_t *c);
-stu_int_t    stu_event_epoll_del_connection(stu_connection_t *c, stu_uint32_t flags);
+stu_int32_t  stu_event_epoll_add_connection(stu_connection_t *c);
+stu_int32_t  stu_event_epoll_del_connection(stu_connection_t *c, stu_uint32_t flags);
 
 stu_int32_t  stu_event_epoll_process_events(stu_fd_t evfd, stu_msec_t timer, stu_uint32_t flags);
 

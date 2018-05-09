@@ -120,6 +120,10 @@ stu_file_write(stu_file_t *file, u_char *buf, size_t size, stu_off_t offset) {
 
 		size -= n;
 	}
+
+#endif
+
+	return written;
 }
 
 

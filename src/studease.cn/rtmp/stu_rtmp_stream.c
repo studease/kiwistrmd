@@ -1,599 +1,70 @@
 /*
- * stu_rtmp_netstream.c
+ * stu_rtmp_stream.c
  *
- *  Created on: 2018骞�1鏈�16鏃�
+ *  Created on: 2018年5月9日
  *      Author: Tony Lau
  */
 
 #include "stu_rtmp.h"
 
 
-void
-stu_rtmp_stream_attach(stu_rtmp_stream_t *ns, stu_rtmp_connection_t *nc) {
-	u_char     tmp[10];
-	stu_str_t  key;
+stu_rtmp_stream_t *
+stu_rtmp_stream_get(u_char *name, size_t len) {
+	stu_rtmp_stream_t *s;
 
-	stu_memzero(tmp, 10);
+	s = stu_calloc(sizeof(stu_rtmp_stream_t));
+	if (s == NULL) {
+		stu_log_error(0, "Failed to calloc rtmp stream: name=%s.", name);
+		return NULL;
+	}
 
-	key.data = tmp;
-	key.len = stu_sprintf(tmp, "%u", ns->id) - tmp;
+	if (name && len) {
+		s->name.data = stu_calloc(len + 1);
+		if (s->name.data == NULL) {
+			stu_log_error(0, "Failed to calloc rtmp stream name: %s.", name);
+			goto failed;
+		}
 
-	ns->connection = nc;
-	ns->type = STU_RTMP_STREAM_TYPE_IDLE;
-	ns->receive_audio = TRUE;
-	ns->receive_video = TRUE;
+		stu_strncpy(s->name.data, name, len);
+		s->name.len = len;
+	}
 
-	stu_hash_init(&ns->data_frames, STU_RTMP_DATA_FRAMES_SIZE, NULL, STU_HASH_FLAGS_LOWCASE);
+	if (stu_hash_init(&s->subscribers, STU_RTMP_SUBSCRIBER_DEFAULT_SIZE, NULL, STU_HASH_FLAGS_LOWCASE) == STU_ERROR) {
+		stu_log_error(0, "Failed to init rtmp subscriber hash: %s.", s->name.data);
+		goto failed;
+	}
 
-	stu_hash_insert_locked(&nc->streams, &key, ns);
+	if (stu_hash_init(&s->data_frames, STU_RTMP_DATA_FRAMES_SIZE, NULL, STU_HASH_FLAGS_LOWCASE) == STU_ERROR) {
+		stu_log_error(0, "Failed to init rtmp data frame hash: %s.", s->name.data);
+		goto failed;
+	}
+
+	return STU_OK;
+
+failed:
+
+	if (s) {
+		if (s->name.data) {
+			stu_free(s->name.data);
+		}
+
+		stu_free(s);
+	}
+
+	return NULL;
 }
-
 
 /*
- * @start:    -2
- * @duration: -1
- * @reset:    TRUE
+ * Lock instance at first. And unlink publisher to this.
  */
-stu_int32_t
-stu_rtmp_play(stu_rtmp_stream_t *ns, u_char *name, size_t len, stu_double_t start, stu_double_t duration, stu_bool_t reset) {
-	stu_rtmp_connection_t *nc;
-	stu_rtmp_amf_t        *ao_cmd, *ao_tran, *ao_prop, *ao_name, *ao_start, *ao_duration, *ao_reset;
-	u_char                *pos;
-	u_char                 tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
-	stu_int32_t            rc;
+void
+stu_rtmp_stream_free(stu_rtmp_stream_t *s) {
+	stu_hash_destroy_locked(&s->subscribers, (stu_hash_cleanup_pt) stu_rtmp_stream_detach);
+	stu_hash_destroy_locked(&s->data_frames, (stu_hash_cleanup_pt) stu_rtmp_amf_delete);
 
-	nc = ns->connection;
-	pos = tmp;
-	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
-
-	ns->name.data = stu_pcalloc(nc->conn->pool, len + 1);
-	if (ns->name.data == NULL) {
-		stu_log_error(0, "Failed to alloc rtmp stream name: %s.", name);
-		return STU_ERROR;
+	if (s->name.data) {
+		stu_free(s->name.data);
 	}
 
-	stu_strncpy(ns->name.data, name, len);
-
-	ao_cmd = stu_rtmp_amf_create_string(NULL, STU_RTMP_CMD_PLAY.data, STU_RTMP_CMD_PLAY.len);
-	ao_tran = stu_rtmp_amf_create_number(NULL, nc->transaction_id++);
-	ao_prop = stu_rtmp_amf_create_null(NULL);
-	ao_name = stu_rtmp_amf_create_string(NULL, name, len);
-	ao_start = stu_rtmp_amf_create_number(NULL, start);
-	ao_duration = stu_rtmp_amf_create_number(NULL, duration);
-	ao_reset = stu_rtmp_amf_create_bool(NULL, reset);
-
-	pos = stu_rtmp_amf_stringify(pos, ao_cmd);
-	pos = stu_rtmp_amf_stringify(pos, ao_tran);
-	pos = stu_rtmp_amf_stringify(pos, ao_prop);
-	pos = stu_rtmp_amf_stringify(pos, ao_name);
-	pos = stu_rtmp_amf_stringify(pos, ao_start);
-	pos = stu_rtmp_amf_stringify(pos, ao_duration);
-	pos = stu_rtmp_amf_stringify(pos, ao_reset);
-
-	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_AV, 0, STU_RTMP_MESSAGE_TYPE_COMMAND, ns->id, tmp, pos - tmp);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to send command \"%s\": fd=%d, stream=%s.",
-				STU_RTMP_CMD_CONNECT.data, nc->conn->fd, name);
-		stu_rtmp_close_connection(nc);
-	}
-
-	stu_rtmp_amf_delete(ao_cmd);
-	stu_rtmp_amf_delete(ao_tran);
-	stu_rtmp_amf_delete(ao_prop);
-	stu_rtmp_amf_delete(ao_name);
-	stu_rtmp_amf_delete(ao_start);
-	stu_rtmp_amf_delete(ao_duration);
-	stu_rtmp_amf_delete(ao_reset);
-
-	return rc;
-}
-
-stu_int32_t
-stu_rtmp_play2(stu_rtmp_stream_t *ns) {
-	// TODO
-	return STU_OK;
-}
-
-stu_int32_t
-stu_rtmp_release_stream(stu_rtmp_connection_t *nc, u_char *name, size_t len) {
-	stu_rtmp_stream_t *ns;
-	stu_rtmp_amf_t    *ao_cmd, *ao_tran, *ao_prop, *ao_name;
-	u_char            *pos;
-	u_char             tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
-	stu_uint32_t       hk, stream_id;
-	stu_int32_t        rc;
-
-	pos = tmp;
-	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
-
-	hk = stu_hash_key(name, len, nc->streams.flags);
-	ns = stu_hash_remove_locked(&nc->streams, hk, name, len);
-	stream_id = ns ? ns->id : 0;
-
-	ao_cmd = stu_rtmp_amf_create_string(NULL, STU_RTMP_CMD_RELEASE_STREAM.data, STU_RTMP_CMD_RELEASE_STREAM.len);
-	ao_tran = stu_rtmp_amf_create_number(NULL, nc->transaction_id++);
-	ao_prop = stu_rtmp_amf_create_null(NULL);
-	ao_name = stu_rtmp_amf_create_string(NULL, name, len);
-
-	pos = stu_rtmp_amf_stringify(pos, ao_cmd);
-	pos = stu_rtmp_amf_stringify(pos, ao_tran);
-	pos = stu_rtmp_amf_stringify(pos, ao_prop);
-	pos = stu_rtmp_amf_stringify(pos, ao_name);
-
-	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND, 0, STU_RTMP_MESSAGE_TYPE_COMMAND, stream_id, tmp, pos - tmp);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to send command \"%s\": fd=%d, stream=%s.",
-				STU_RTMP_CMD_RELEASE_STREAM.data, nc->conn->fd, name);
-		stu_rtmp_close_connection(nc);
-	}
-
-	stu_rtmp_amf_delete(ao_cmd);
-	stu_rtmp_amf_delete(ao_tran);
-	stu_rtmp_amf_delete(ao_prop);
-	stu_rtmp_amf_delete(ao_name);
-
-	return rc;
-}
-
-stu_int32_t
-stu_rtmp_delete_stream(stu_rtmp_connection_t *nc, stu_uint32_t stream_id) {
-	stu_rtmp_amf_t *ao_cmd, *ao_tran, *ao_prop, *ao_id;
-	u_char         *pos;
-	u_char          tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
-	stu_str_t       key;
-	stu_uint32_t    hk;
-	stu_int32_t     rc;
-
-	pos = tmp;
-	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
-
-	key.data = tmp;
-	key.len = stu_sprintf(tmp, "%u", stream_id) - tmp;
-
-	hk = stu_hash_key(key.data, key.len, nc->streams.flags);
-	stu_hash_remove_locked(&nc->streams, hk, key.data, key.len);
-
-	ao_cmd = stu_rtmp_amf_create_string(NULL, STU_RTMP_CMD_DELETE_STREAM.data, STU_RTMP_CMD_DELETE_STREAM.len);
-	ao_tran = stu_rtmp_amf_create_number(NULL, nc->transaction_id++);
-	ao_prop = stu_rtmp_amf_create_null(NULL);
-	ao_id = stu_rtmp_amf_create_number(NULL, stream_id);
-
-	pos = stu_rtmp_amf_stringify(pos, ao_cmd);
-	pos = stu_rtmp_amf_stringify(pos, ao_tran);
-	pos = stu_rtmp_amf_stringify(pos, ao_prop);
-	pos = stu_rtmp_amf_stringify(pos, ao_id);
-
-	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND, 0, STU_RTMP_MESSAGE_TYPE_COMMAND, stream_id, tmp, pos - tmp);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to send command \"%s\": fd=%d, stream_id=%f.",
-				STU_RTMP_CMD_DELETE_STREAM.data, nc->conn->fd, stream_id);
-		stu_rtmp_close_connection(nc);
-	}
-
-	stu_rtmp_amf_delete(ao_cmd);
-	stu_rtmp_amf_delete(ao_tran);
-	stu_rtmp_amf_delete(ao_prop);
-	stu_rtmp_amf_delete(ao_id);
-
-	return rc;
-}
-
-stu_int32_t
-stu_rtmp_close_stream(stu_rtmp_stream_t *ns) {
-	// TODO
-	return STU_OK;
-}
-
-stu_int32_t
-stu_rtmp_receive_audio(stu_rtmp_stream_t *ns, stu_bool_t flag) {
-	stu_rtmp_connection_t *nc;
-	stu_rtmp_amf_t        *ao_cmd, *ao_tran, *ao_prop, *ao_flag;
-	u_char                *pos;
-	u_char                 tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
-	stu_int32_t            rc;
-
-	nc = ns->connection;
-	pos = tmp;
-	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
-
-	ao_cmd = stu_rtmp_amf_create_string(NULL, STU_RTMP_CMD_RECEIVE_AUDIO.data, STU_RTMP_CMD_RECEIVE_AUDIO.len);
-	ao_tran = stu_rtmp_amf_create_number(NULL, nc->transaction_id++);
-	ao_prop = stu_rtmp_amf_create_null(NULL);
-	ao_flag = stu_rtmp_amf_create_bool(NULL, flag);
-
-	pos = stu_rtmp_amf_stringify(pos, ao_cmd);
-	pos = stu_rtmp_amf_stringify(pos, ao_tran);
-	pos = stu_rtmp_amf_stringify(pos, ao_prop);
-	pos = stu_rtmp_amf_stringify(pos, ao_flag);
-
-	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND_2, 0, STU_RTMP_MESSAGE_TYPE_COMMAND, ns->id, tmp, pos - tmp);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to send command \"%s\": fd=%d, flag=%d.",
-				STU_RTMP_CMD_RECEIVE_AUDIO.data, nc->conn->fd, flag);
-		stu_rtmp_close_connection(nc);
-	}
-
-	stu_rtmp_amf_delete(ao_cmd);
-	stu_rtmp_amf_delete(ao_tran);
-	stu_rtmp_amf_delete(ao_prop);
-	stu_rtmp_amf_delete(ao_flag);
-
-	return rc;
-}
-
-stu_int32_t
-stu_rtmp_receive_video(stu_rtmp_stream_t *ns, stu_bool_t flag) {
-	stu_rtmp_connection_t *nc;
-	stu_rtmp_amf_t        *ao_cmd, *ao_tran, *ao_prop, *ao_flag;
-	u_char                *pos;
-	u_char                 tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
-	stu_int32_t            rc;
-
-	nc = ns->connection;
-	pos = tmp;
-	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
-
-	ao_cmd = stu_rtmp_amf_create_string(NULL, STU_RTMP_CMD_RECEIVE_VIDEO.data, STU_RTMP_CMD_RECEIVE_VIDEO.len);
-	ao_tran = stu_rtmp_amf_create_number(NULL, nc->transaction_id++);
-	ao_prop = stu_rtmp_amf_create_null(NULL);
-	ao_flag = stu_rtmp_amf_create_bool(NULL, flag);
-
-	pos = stu_rtmp_amf_stringify(pos, ao_cmd);
-	pos = stu_rtmp_amf_stringify(pos, ao_tran);
-	pos = stu_rtmp_amf_stringify(pos, ao_prop);
-	pos = stu_rtmp_amf_stringify(pos, ao_flag);
-
-	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND_2, 0, STU_RTMP_MESSAGE_TYPE_COMMAND, ns->id, tmp, pos - tmp);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to send command \"%s\": fd=%d, flag=%d.",
-				STU_RTMP_CMD_RECEIVE_VIDEO.data, nc->conn->fd, flag);
-		stu_rtmp_close_connection(nc);
-	}
-
-	stu_rtmp_amf_delete(ao_cmd);
-	stu_rtmp_amf_delete(ao_tran);
-	stu_rtmp_amf_delete(ao_prop);
-	stu_rtmp_amf_delete(ao_flag);
-
-	return rc;
-}
-
-stu_int32_t
-stu_rtmp_publish(stu_rtmp_stream_t *ns, u_char *name, size_t len, stu_str_t *type) {
-	stu_rtmp_connection_t *nc;
-	stu_rtmp_amf_t        *ao_cmd, *ao_tran, *ao_prop, *ao_name, *ao_type;
-	u_char                *pos;
-	u_char                 tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
-	stu_int32_t            rc;
-
-	nc = ns->connection;
-	pos = tmp;
-	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
-
-	ao_cmd = stu_rtmp_amf_create_string(NULL, STU_RTMP_CMD_PUBLISH.data, STU_RTMP_CMD_PUBLISH.len);
-	ao_tran = stu_rtmp_amf_create_number(NULL, nc->transaction_id++);
-	ao_prop = stu_rtmp_amf_create_null(NULL);
-	ao_name = stu_rtmp_amf_create_string(NULL, name, len);
-	ao_type = stu_rtmp_amf_create_string(NULL, type->data, type->len);
-
-	pos = stu_rtmp_amf_stringify(pos, ao_cmd);
-	pos = stu_rtmp_amf_stringify(pos, ao_tran);
-	pos = stu_rtmp_amf_stringify(pos, ao_prop);
-	pos = stu_rtmp_amf_stringify(pos, ao_name);
-	pos = stu_rtmp_amf_stringify(pos, ao_type);
-
-	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND_2, 0, STU_RTMP_MESSAGE_TYPE_COMMAND, ns->id, tmp, pos - tmp);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to send command \"%s\": fd=%d, stream=%s, type=%s.",
-				STU_RTMP_CMD_PUBLISH.data, nc->conn->fd, name, type->data);
-		stu_rtmp_close_connection(nc);
-	}
-
-	stu_rtmp_amf_delete(ao_cmd);
-	stu_rtmp_amf_delete(ao_tran);
-	stu_rtmp_amf_delete(ao_prop);
-	stu_rtmp_amf_delete(ao_name);
-	stu_rtmp_amf_delete(ao_type);
-
-	return rc;
-}
-
-stu_int32_t
-stu_rtmp_seek(stu_rtmp_stream_t *ns) {
-	// TODO
-	return STU_OK;
-}
-
-stu_int32_t
-stu_rtmp_pause(stu_rtmp_stream_t *ns, stu_bool_t flag, stu_double_t time) {
-	stu_rtmp_connection_t *nc;
-	stu_rtmp_amf_t        *ao_cmd, *ao_tran, *ao_prop, *ao_flag, *ao_time;
-	u_char                *pos;
-	u_char                 tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
-	stu_int32_t            rc;
-
-	nc = ns->connection;
-	pos = tmp;
-	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
-
-	ao_cmd = stu_rtmp_amf_create_string(NULL, STU_RTMP_CMD_PAUSE.data, STU_RTMP_CMD_PAUSE.len);
-	ao_tran = stu_rtmp_amf_create_number(NULL, nc->transaction_id++);
-	ao_prop = stu_rtmp_amf_create_null(NULL);
-	ao_flag = stu_rtmp_amf_create_bool(NULL, flag);
-	ao_time = stu_rtmp_amf_create_number(NULL, time);
-
-	pos = stu_rtmp_amf_stringify(pos, ao_cmd);
-	pos = stu_rtmp_amf_stringify(pos, ao_tran);
-	pos = stu_rtmp_amf_stringify(pos, ao_prop);
-	pos = stu_rtmp_amf_stringify(pos, ao_flag);
-	pos = stu_rtmp_amf_stringify(pos, ao_time);
-
-	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND_2, 0, STU_RTMP_MESSAGE_TYPE_COMMAND, ns->id, tmp, pos - tmp);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to send command \"%s\": fd=%d, stream=%s, flag=%d, time=%f.",
-				STU_RTMP_CMD_PAUSE.data, nc->conn->fd, ns->name.data, flag, time);
-		stu_rtmp_close_connection(nc);
-	}
-
-	stu_rtmp_amf_delete(ao_cmd);
-	stu_rtmp_amf_delete(ao_tran);
-	stu_rtmp_amf_delete(ao_prop);
-	stu_rtmp_amf_delete(ao_flag);
-	stu_rtmp_amf_delete(ao_time);
-
-	return rc;
-}
-
-stu_int32_t
-stu_rtmp_send_status(stu_rtmp_stream_t *ns, stu_str_t *level, stu_str_t *code, const char *description) {
-	stu_rtmp_connection_t *nc;
-	stu_rtmp_amf_t        *ao_cmd, *ao_tran, *ao_prop, *ao_info;
-	u_char                *pos;
-	u_char                 tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
-	stu_int32_t            rc;
-
-	nc = ns->connection;
-	pos = tmp;
-	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
-
-	ao_cmd = stu_rtmp_amf_create_string(NULL, STU_RTMP_CMD_ON_STATUS.data, STU_RTMP_CMD_ON_STATUS.len);
-	ao_tran = stu_rtmp_amf_create_number(NULL, 0);
-	ao_prop = stu_rtmp_amf_create_null(NULL);
-	ao_info = stu_rtmp_get_information(level, code, description);
-
-	pos = stu_rtmp_amf_stringify(pos, ao_cmd);
-	pos = stu_rtmp_amf_stringify(pos, ao_tran);
-	pos = stu_rtmp_amf_stringify(pos, ao_prop);
-	pos = stu_rtmp_amf_stringify(pos, ao_info);
-
-	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND_2, 0, STU_RTMP_MESSAGE_TYPE_COMMAND, ns->id, tmp, pos - tmp);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to send command \"%s\": fd=%d, level=%s, code=%s.",
-				STU_RTMP_CMD_ON_STATUS.data, nc->conn->fd, level->data, code->data);
-		stu_rtmp_close_connection(nc);
-	}
-
-	stu_rtmp_amf_delete(ao_cmd);
-	stu_rtmp_amf_delete(ao_tran);
-	stu_rtmp_amf_delete(ao_prop);
-	stu_rtmp_amf_delete(ao_info);
-
-	return rc;
-}
-
-
-stu_int32_t
-stu_rtmp_set_data_frame(stu_rtmp_stream_t *ns, stu_str_t *key, stu_rtmp_amf_t *value, stu_bool_t remote) {
-	stu_rtmp_connection_t *nc;
-	stu_rtmp_amf_t        *ao_hlr, *ao_key;
-	u_char                *pos;
-	u_char                 tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
-	stu_int32_t            rc;
-
-	nc = ns->connection;
-	pos = tmp;
-	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
-
-	if (stu_hash_insert_locked(&ns->data_frames, key, value) == STU_ERROR) {
-		stu_log_error(0, "Failed to %s: fd=%d, key=%s, value=%p.",
-				STU_RTMP_SET_DATA_FRAME.data, nc->conn->fd, key->data, value);
-		return STU_ERROR;
-	}
-
-	if (stu_strncmp(STU_RTMP_ON_META_DATA.data, key->data, key->len) == 0) {
-		ns->metadata = value;
-	}
-
-	if (remote == FALSE) {
-		rc = STU_OK;
-		goto done;
-	}
-
-	ao_hlr = stu_rtmp_amf_create_string(NULL, STU_RTMP_SET_DATA_FRAME.data, STU_RTMP_SET_DATA_FRAME.len);
-	ao_key = stu_rtmp_amf_create_string(NULL, key->data, key->len);
-
-	pos = stu_rtmp_amf_stringify(pos, ao_hlr);
-	pos = stu_rtmp_amf_stringify(pos, ao_key);
-	pos = stu_rtmp_amf_stringify(pos, value);
-
-	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND_2, 0, STU_RTMP_MESSAGE_TYPE_DATA, ns->id, tmp, pos - tmp);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to send command \"%s\": fd=%d, key=%s, value=%p.",
-				STU_RTMP_SET_DATA_FRAME.data, nc->conn->fd, key->data, value);
-	}
-
-	stu_rtmp_amf_delete(ao_hlr);
-	stu_rtmp_amf_delete(ao_key);
-
-done:
-
-	if (rc == STU_OK) {
-		stu_log_debug(4, "%s: fd=%d, key=%s.", STU_RTMP_SET_DATA_FRAME.data, nc->conn->fd, key->data);
-	}
-
-	return rc;
-}
-
-stu_int32_t
-stu_rtmp_clear_data_frame(stu_rtmp_stream_t *ns, stu_str_t *key, stu_bool_t remote) {
-	stu_rtmp_connection_t *nc;
-	stu_rtmp_amf_t        *ao_hlr, *ao_key;
-	u_char                *pos;
-	u_char                 tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
-	stu_uint32_t           hk;
-	stu_int32_t            rc;
-
-	nc = ns->connection;
-	pos = tmp;
-	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
-
-	hk = stu_hash_key(key->data, key->len, ns->data_frames.flags);
-	stu_hash_remove_locked(&ns->data_frames, hk, key->data, key->len);
-
-	if (stu_strncmp(STU_RTMP_ON_META_DATA.data, key->data, key->len) == 0) {
-		if (ns->metadata) {
-			stu_rtmp_amf_delete(ns->metadata);
-			ns->metadata = NULL;
-		}
-	}
-
-	if (remote == FALSE) {
-		rc = STU_OK;
-		goto done;
-	}
-
-	ao_hlr = stu_rtmp_amf_create_string(NULL, STU_RTMP_CLEAR_DATA_FRAME.data, STU_RTMP_CLEAR_DATA_FRAME.len);
-	ao_key = stu_rtmp_amf_create_string(NULL, key->data, key->len);
-
-	pos = stu_rtmp_amf_stringify(pos, ao_hlr);
-	pos = stu_rtmp_amf_stringify(pos, ao_key);
-
-	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND_2, 0, STU_RTMP_MESSAGE_TYPE_DATA, ns->id, tmp, pos - tmp);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to send command \"%s\": fd=%d, key=%s.",
-				STU_RTMP_CLEAR_DATA_FRAME.data, nc->conn->fd, key->data);
-	}
-
-	stu_rtmp_amf_delete(ao_hlr);
-	stu_rtmp_amf_delete(ao_key);
-
-done:
-
-	if (rc == STU_OK) {
-		stu_log_debug(4, "%s: fd=%d, key=%s.", STU_RTMP_CLEAR_DATA_FRAME.data, nc->conn->fd, key->data);
-	}
-
-	return STU_OK;
-}
-
-stu_int32_t
-stu_rtmp_send_video_frame(stu_rtmp_stream_t *ns, stu_uint32_t timestamp, u_char *data, size_t len) {
-	stu_rtmp_connection_t *nc;
-	stu_int32_t            rc;
-
-	nc = ns->connection;
-
-	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND_2, timestamp, STU_RTMP_MESSAGE_TYPE_VIDEO, ns->id, data, len);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to send video frame: fd=%d, ts=%u.", nc->conn->fd, timestamp);
-	}
-
-	return rc;
-}
-
-stu_int32_t
-stu_rtmp_send_audio_frame(stu_rtmp_stream_t *ns, stu_uint32_t timestamp, u_char *data, size_t len) {
-	stu_rtmp_connection_t *nc;
-	stu_int32_t            rc;
-
-	nc = ns->connection;
-
-	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND_2, timestamp, STU_RTMP_MESSAGE_TYPE_AUDIO, ns->id, data, len);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to send audio frame: fd=%d, ts=%u.", nc->conn->fd, timestamp);
-	}
-
-	return rc;
-}
-
-
-stu_int32_t
-stu_rtmp_on_play(stu_rtmp_request_t *r) {
-	return STU_OK;
-}
-
-stu_int32_t
-stu_rtmp_on_play2(stu_rtmp_request_t *r) {
-	return STU_OK;
-}
-
-stu_int32_t
-stu_rtmp_on_release_stream(stu_rtmp_request_t *r) {
-	return STU_OK;
-}
-
-stu_int32_t
-stu_rtmp_on_delete_stream(stu_rtmp_request_t *r) {
-	return STU_OK;
-}
-
-stu_int32_t
-stu_rtmp_on_close_stream(stu_rtmp_request_t *r) {
-	return STU_OK;
-}
-
-stu_int32_t
-stu_rtmp_on_receive_audio(stu_rtmp_request_t *r) {
-	return STU_OK;
-}
-
-stu_int32_t
-stu_rtmp_on_receive_video(stu_rtmp_request_t *r) {
-	return STU_OK;
-}
-
-stu_int32_t
-stu_rtmp_on_fcpublish(stu_rtmp_request_t *r) {
-	return STU_OK;
-}
-
-stu_int32_t
-stu_rtmp_on_publish(stu_rtmp_request_t *r) {
-	return STU_OK;
-}
-
-stu_int32_t
-stu_rtmp_on_seek(stu_rtmp_request_t *r) {
-	return STU_OK;
-}
-
-stu_int32_t
-stu_rtmp_on_pause(stu_rtmp_request_t *r) {
-	return STU_OK;
-}
-
-stu_int32_t
-stu_rtmp_on_status(stu_rtmp_request_t *r) {
-	stu_rtmp_chunk_t      *ck;
-	stu_rtmp_connection_t *nc;
-	stu_rtmp_stream_t     *ns;
-	u_char                 tmp[10];
-	stu_str_t              key;
-	stu_uint32_t           hk;
-
-	nc = &r->connection;
-	ck = r->chunk_in;
-	stu_memzero(tmp, 10);
-
-	key.data = tmp;
-	key.len = stu_sprintf(tmp, "%u", ck->stream_id) - tmp;
-
-	hk = stu_hash_key(key.data, key.len, nc->streams.flags);
-
-	ns = stu_hash_find_locked(&nc->streams, hk, key.data, key.len);
-	if (ns && ns->on_status) {
-		return ns->on_status(r);
-	}
-
-	return STU_OK; // Just ignore.
+	stu_free(s);
 }

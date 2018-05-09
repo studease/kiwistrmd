@@ -203,8 +203,10 @@ stu_rtmp_create_request(stu_connection_t *c) {
 			return NULL;
 		}
 
-		stu_rtmp_connection_init(&r->connection, c);
+		stu_rtmp_netconnection_init(&r->connection, c);
 		stu_queue_init(&r->chunks);
+
+		r->streams = stu_pcalloc(c->pool, sizeof(stu_rtmp_netstream_t *) * STU_RTMP_NETSTREAM_MAXIMAM);
 	} else {
 		r = c->request;
 	}
@@ -255,7 +257,7 @@ stu_rtmp_process_chunk(stu_event_t *ev) {
 
 			rc = stu_rtmp_process_message(r);
 			if (rc != STU_OK) {
-				stu_log_error(0, "rtmp failed to process request message.");
+				stu_log_error(0, "Failed to process rtmp request message.");
 				stu_rtmp_finalize_request(r, STU_ERROR);
 				return;
 			}
@@ -320,15 +322,17 @@ static stu_int32_t
 stu_rtmp_process_message(stu_rtmp_request_t *r) {
 	stu_rtmp_message_listener_t *l;
 	stu_rtmp_chunk_t            *ck;
+	stu_rtmp_netconnection_t    *nc;
 	u_char                       tmp[3];
 	stu_str_t                    key;
 	stu_uint32_t                 hk;
 
+	nc = &r->connection;
 	ck = r->chunk_in;
 	stu_memzero(tmp, 3);
 
-	stu_log_debug(4, "rtmp message: fmt=%d, csid=0x%02X, ts=%d, type=0x%02X, stream_id=%d, payload=%d.",
-			ck->fmt, ck->csid, ck->timestamp, ck->type_id, ck->stream_id, ck->payload.size);
+	stu_log_debug(4, "rtmp message: fd=%d, fmt=%d, csid=0x%02X, ts=%d, type=0x%02X, stream_id=%d, payload=%d.",
+			nc->conn->fd, ck->fmt, ck->csid, ck->timestamp, ck->type_id, ck->stream_id, ck->payload.size);
 
 	key.data = tmp;
 	key.len = stu_sprintf(tmp, "%u", ck->type_id) - tmp;
@@ -670,12 +674,12 @@ done:
 
 static stu_int32_t
 stu_rtmp_process_command_connect(stu_rtmp_request_t *r) {
-	stu_rtmp_connection_t *nc;
-	stu_rtmp_chunk_t      *ck;
-	stu_buf_t             *buf;
-	stu_rtmp_amf_t        *v, *item;
-	stu_str_t             *str;
-	stu_int32_t            rc;
+	stu_rtmp_netconnection_t *nc;
+	stu_rtmp_chunk_t         *ck;
+	stu_buf_t                *buf;
+	stu_rtmp_amf_t           *v, *item;
+	stu_str_t                *str;
+	stu_int32_t               rc;
 
 	nc = &r->connection;
 	ck = r->chunk_in;
@@ -1175,13 +1179,45 @@ failed:
 
 static stu_int32_t
 stu_rtmp_process_command_fcpublish(stu_rtmp_request_t *r) {
-	stu_int32_t  rc;
+	stu_rtmp_chunk_t *ck;
+	stu_buf_t        *buf;
+	stu_rtmp_amf_t   *v;
+	stu_int32_t       rc;
+
+	ck = r->chunk_in;
+	buf = &ck->payload;
+
+	// command object
+	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp command: %s.", r->command->data);
+		return STU_ERROR;
+	}
+
+	r->command_obj = v; // null
+	buf->pos += v->cost;
+
+	// publishing name
+	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp command: %s.", r->command->data);
+		goto failed;
+	}
+
+	r->stream_name = (stu_str_t *) v->value;
+	buf->pos += v->cost;
 
 	// handler
 	rc = stu_rtmp_on_fcpublish(r);
 	if (rc == STU_ERROR) {
 		stu_log_error(0, "Failed to handle rtmp command: %s.", r->command->data);
 	}
+
+	stu_rtmp_amf_delete(v);
+
+failed:
+
+	stu_rtmp_amf_delete(r->command_obj);
 
 	return rc;
 }
@@ -1213,7 +1249,7 @@ stu_rtmp_process_command_publish(stu_rtmp_request_t *r) {
 		goto failed;
 	}
 
-	r->publishing_name = (stu_str_t *) v->value;
+	r->stream_name = (stu_str_t *) v->value;
 	buf->pos += v->cost;
 
 	ai_name = v;
@@ -1483,11 +1519,13 @@ stu_rtmp_on_ack(stu_rtmp_request_t *r) {
 
 static stu_int32_t
 stu_rtmp_on_user_control(stu_rtmp_request_t *r) {
-	stu_rtmp_stream_t *ns;
-	u_char             tmp[10];
-	stu_str_t          key;
-	stu_uint32_t       hk;
+	stu_rtmp_netconnection_t *nc;
+	stu_rtmp_netstream_t     *ns;
+	u_char                    tmp[10];
+	stu_str_t                 key;
+	stu_uint32_t              hk;
 
+	nc = &r->connection;
 	stu_memzero(tmp, 10);
 
 	stu_log_debug(4, "rtmp user control: type=%d, stream=%d, timestamp=%d, buffer=%d.",
@@ -1498,9 +1536,9 @@ stu_rtmp_on_user_control(stu_rtmp_request_t *r) {
 		key.data = tmp;
 		key.len = stu_sprintf(tmp, "%u", r->stream_id) - tmp;
 
-		hk = stu_hash_key(key.data, key.len, r->connection.streams.flags);
+		hk = stu_hash_key(key.data, key.len, nc->netstreams.flags);
 
-		ns = stu_hash_find_locked(&r->connection.streams, hk, key.data, key.len);
+		ns = stu_hash_find_locked(&nc->netstreams, hk, key.data, key.len);
 		if (ns == NULL) {
 			return STU_ERROR;
 		}
@@ -1586,8 +1624,8 @@ stu_rtmp_on_command(stu_rtmp_request_t *r) {
 
 static stu_int32_t
 stu_rtmp_on_set_data_frame(stu_rtmp_request_t *r) {
-	stu_rtmp_connection_t *nc;
-	stu_rtmp_stream_t     *ns;
+	stu_rtmp_netconnection_t *nc;
+	stu_rtmp_netstream_t     *ns;
 	stu_rtmp_chunk_t      *ck;
 	u_char                 tmp[10];
 	stu_str_t              key;
@@ -1600,9 +1638,9 @@ stu_rtmp_on_set_data_frame(stu_rtmp_request_t *r) {
 	key.data = tmp;
 	key.len = stu_sprintf(tmp, "%u", ck->stream_id) - tmp;
 
-	hk = stu_hash_key(key.data, key.len, nc->streams.flags);
+	hk = stu_hash_key(key.data, key.len, nc->netstreams.flags);
 
-	ns = stu_hash_find_locked(&nc->streams, hk, key.data, key.len);
+	ns = stu_hash_find_locked(&nc->netstreams, hk, key.data, key.len);
 	if (ns) {
 		stu_rtmp_finalize_request(r, STU_DECLINED);
 		return stu_rtmp_set_data_frame(ns, r->data_key, r->data_value, FALSE);
@@ -1615,8 +1653,8 @@ stu_rtmp_on_set_data_frame(stu_rtmp_request_t *r) {
 
 static stu_int32_t
 stu_rtmp_on_clear_data_frame(stu_rtmp_request_t *r) {
-	stu_rtmp_connection_t *nc;
-	stu_rtmp_stream_t     *ns;
+	stu_rtmp_netconnection_t *nc;
+	stu_rtmp_netstream_t     *ns;
 	stu_rtmp_chunk_t      *ck;
 	u_char                 tmp[10];
 	stu_str_t              key;
@@ -1629,9 +1667,9 @@ stu_rtmp_on_clear_data_frame(stu_rtmp_request_t *r) {
 	key.data = tmp;
 	key.len = stu_sprintf(tmp, "%u", ck->stream_id) - tmp;
 
-	hk = stu_hash_key(key.data, key.len, nc->streams.flags);
+	hk = stu_hash_key(key.data, key.len, nc->netstreams.flags);
 
-	ns = stu_hash_find_locked(&nc->streams, hk, key.data, key.len);
+	ns = stu_hash_find_locked(&nc->netstreams, hk, key.data, key.len);
 	if (ns) {
 		stu_rtmp_finalize_request(r, STU_DECLINED);
 		return stu_rtmp_clear_data_frame(ns, r->data_key, FALSE);
@@ -1748,6 +1786,24 @@ stu_rtmp_request_empty_handler(stu_rtmp_request_t *r) {
 }
 
 
+stu_rtmp_netstream_t *
+stu_rtmp_find_netstream(stu_rtmp_request_t *r, stu_uint32_t stream_id) {
+	stu_rtmp_netconnection_t *nc;
+	stu_rtmp_netstream_t     *ns;
+
+	nc = &r->connection;
+
+	if (stream_id == 0 || stream_id >= nc->stream_id) {
+		stu_log_error(0, "rtmp stream id out of range: id=%d.", stream_id);
+		return NULL;
+	}
+
+	ns = r->streams[stream_id - 1];
+
+	return ns;
+}
+
+
 void
 stu_rtmp_free_request(stu_rtmp_request_t *r) {
 	r->connection.conn->request = NULL;
@@ -1755,7 +1811,7 @@ stu_rtmp_free_request(stu_rtmp_request_t *r) {
 
 void
 stu_rtmp_close_request(stu_rtmp_request_t *r) {
-	stu_rtmp_connection_t *nc;
+	stu_rtmp_netconnection_t *nc;
 
 	nc = &r->connection;
 

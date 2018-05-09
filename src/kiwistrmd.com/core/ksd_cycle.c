@@ -7,7 +7,6 @@
 
 #include "ksd_core.h"
 
-stu_uint32_t          ksd_ncpu;
 volatile ksd_cycle_t *ksd_cycle;
 
 extern stu_str_t      KSD_CONF_DEFAULT_PATH;
@@ -18,8 +17,6 @@ ksd_cycle_init() {
 	stu_pool_data_t *data;
 	u_char          *p;
 	stu_shm_t        shm;
-
-	ksd_ncpu = sysconf(_SC_NPROCESSORS_ONLN);
 
 	shm.size = KSD_CYCLE_DEFAULT_SIZE;
 	if (stu_shm_alloc(&shm) == STU_ERROR) {
@@ -83,6 +80,12 @@ ksd_cycle_init() {
 		return STU_ERROR;
 	}
 
+	// connection
+	if (stu_connection_init() == STU_ERROR) {
+		stu_log_error(0, "Failed to init connection.");
+		return STU_ERROR;
+	}
+
 	// mq
 	if (stu_mq_init((stu_str_t *) &ksd_cycle->conf.root, KSD_CYCLE_RECORD_DEFAULT_SIZE) == STU_ERROR) {
 		stu_log_error(0, "Failed to init mq.");
@@ -112,10 +115,6 @@ ksd_cycle_init() {
 		return STU_ERROR;
 	}
 
-	if (stu_rtmp_application_init_hash() == STU_ERROR) {
-		return STU_ERROR;
-	}
-
 	// request
 	if (ksd_request_init() == STU_ERROR) {
 		return STU_ERROR;
@@ -127,9 +126,9 @@ ksd_cycle_init() {
 
 stu_int32_t
 ksd_cycle_create_pidfile(stu_file_t *pid) {
-	u_char  tmp[STU_FILE_PATH_MAX_LEN];
+	u_char  tmp[STU_MAX_PATH];
 
-	stu_memzero(tmp, STU_FILE_PATH_MAX_LEN);
+	stu_memzero(tmp, STU_MAX_PATH);
 
 	pid->fd = stu_file_open(pid->name.data, STU_FILE_RDWR, STU_FILE_TRUNCATE, STU_FILE_DEFAULT_ACCESS);
 	if (pid->fd == STU_FILE_INVALID) {

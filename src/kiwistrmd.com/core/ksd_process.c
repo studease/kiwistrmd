@@ -7,7 +7,7 @@
 
 #include "ksd_core.h"
 
-stu_fd_t  ksd_epfd;
+stu_fd_t  ksd_evfd;
 
 extern volatile ksd_cycle_t *ksd_cycle;
 
@@ -76,8 +76,8 @@ void
 ksd_process_worker_cycle(stu_int32_t threads, void *data) {
 	stu_int32_t  n, err;
 
-	ksd_epfd = stu_event_create();
-	if (ksd_epfd == -1) {
+	ksd_evfd = stu_event_create();
+	if (ksd_evfd == -1) {
 		stu_log_error(0, "Failed to create worker event.");
 		exit(2);
 	}
@@ -101,7 +101,7 @@ ksd_process_worker_cycle(stu_int32_t threads, void *data) {
 			exit(2);
 		}
 
-		if (stu_thread_create(&stu_threads[n].id, &stu_threads[n].epfd, ksd_process_worker_thread_cycle, (void *) &stu_threads[n]) == STU_ERROR) {
+		if (stu_thread_create(&stu_threads[n].id, &stu_threads[n].evfd, ksd_process_worker_thread_cycle, (void *) &stu_threads[n]) == STU_ERROR) {
 			stu_log_error(0, "Failed to create thread[%d].", n);
 			exit(2);
 		}
@@ -114,7 +114,7 @@ ksd_process_worker_cycle(stu_int32_t threads, void *data) {
 	}
 
 	// listen
-	if (stu_rtmp_listen(ksd_epfd, ksd_cycle->conf.port) == STU_ERROR) {
+	if (stu_rtmp_listen(ksd_evfd, ksd_cycle->conf.port) == STU_ERROR) {
 		stu_log_error(0, "Failed to add rtmp listen: port=\"%d\".", ksd_cycle->conf.port);
 		exit(2);
 	}
@@ -125,7 +125,7 @@ ksd_process_worker_cycle(stu_int32_t threads, void *data) {
 			// TODO: remove timers, free memory
 		}
 
-		stu_event_process_events_and_timers(ksd_epfd);
+		stu_event_process_events_and_timers(ksd_evfd);
 
 		if (stu_quit) {
 			stu_log("worker process shutting down...");
@@ -171,7 +171,7 @@ ksd_process_worker_init() {
 		stu_log_error(stu_errno, "close() channel failed");
 	}
 
-	if (stu_channel_add_event(ksd_epfd, stu_channel, STU_READ_EVENT, ksd_process_channel_handler) == STU_ERROR) {
+	if (stu_channel_add_event(ksd_evfd, stu_channel, STU_READ_EVENT, ksd_process_channel_handler) == STU_ERROR) {
 		/* fatal */
 		exit(2);
 	}
@@ -252,7 +252,7 @@ ksd_process_worker_thread_cycle(void *data) {
 	}
 
 	for ( ;; ) {
-		stu_event_process_events_and_timers(thr->epfd);
+		stu_event_process_events_and_timers(thr->evfd);
 	}
 
 	stu_log_error(0, "worker thread exit.");

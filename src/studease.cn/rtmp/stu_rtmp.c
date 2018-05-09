@@ -71,6 +71,11 @@ stu_rtmp_init() {
 		return STU_ERROR;
 	}
 
+	// application
+	if (stu_rtmp_application_init_hash() == STU_ERROR) {
+		return STU_ERROR;
+	}
+
 	return STU_OK;
 }
 

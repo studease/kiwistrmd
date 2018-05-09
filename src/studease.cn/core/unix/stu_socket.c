@@ -1,7 +1,7 @@
 /*
  * stu_socket.c
  *
- *  Created on: 2018Äê3ÔÂ30ÈÕ
+ *  Created on: 2018ï¿½ï¿½3ï¿½ï¿½30ï¿½ï¿½
  *      Author: Tony Lau
  */
 
@@ -63,7 +63,7 @@ stu_tcp_push(stu_socket_t s) {
 	return setsockopt(s, IPPROTO_TCP, TCP_NOPUSH, (const void *) &tcp_nopush, sizeof(int));
 }
 
-#elif (STU_LINUX)
+#elif (!STU_LINUX)
 
 int
 stu_tcp_nopush(stu_socket_t s) {
@@ -94,3 +94,5 @@ int
 stu_tcp_push(stu_socket_t s) {
 	return 0;
 }
+
+#endif

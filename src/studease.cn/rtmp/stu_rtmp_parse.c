@@ -145,7 +145,7 @@ hs_done:
 
 stu_int32_t
 stu_rtmp_parse_chunk(stu_rtmp_request_t *r, stu_buf_t *src) {
-	stu_rtmp_connection_t *nc;
+	stu_rtmp_netconnection_t *nc;
 	stu_rtmp_chunk_t      *ck;
 	u_char                 ch;
 	stu_uint32_t           n;

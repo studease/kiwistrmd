@@ -45,7 +45,8 @@ struct stu_rtmp_instance_s {
 	stu_str_t             name;
 	stu_hash_t            connections;
 	stu_hash_t            streams;
-	stu_uint8_t           state;
+
+	stu_uint32_t          stream_id;
 
 	stu_rtmp_inst_stat_t  stat;
 

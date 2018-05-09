@@ -378,6 +378,7 @@ stu_rtmp_finalize_handshaker(stu_rtmp_handshaker_t *h, stu_int32_t rc) {
 
 		default:
 			stu_log_error(0, "Unknown rtmp handshaker type: %d", h->type);
+			break;
 		}
 
 		c->buffer.start = c->buffer.end = NULL;

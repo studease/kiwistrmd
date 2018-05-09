@@ -22,7 +22,7 @@ static stu_int32_t  ksd_push_stat_analyze_response(stu_connection_t *pc);
 static void         ksd_push_stat_finalize_handler(stu_connection_t *c, stu_int32_t rc);
 
 extern volatile ksd_cycle_t   *ksd_cycle;
-extern stu_fd_t                ksd_epfd;
+extern stu_fd_t                ksd_evfd;
 //extern stu_hash_t              stu_rtmp_applications;
 extern stu_list_t              stu_http_phases;
 extern stu_list_t              stu_websocket_phases;
@@ -187,15 +187,15 @@ ksd_add_push_stat_timer(stu_msec_t timer) {
 			return STU_ERROR;
 		}
 
-		c->read.epfd = ksd_epfd;
-		c->write.epfd = ksd_epfd;
+		c->read->evfd = ksd_evfd;
+		c->write->evfd = ksd_evfd;
 
-		c->write.handler = ksd_push_stat_handler;
+		c->write->handler = ksd_push_stat_handler;
 
 		ksd_timer_push_stat = c;
 	}
 
-	stu_timer_add_locked(&c->write, timer);
+	stu_timer_add_locked(c->write, timer);
 
 	return STU_OK;
 }
@@ -256,5 +256,5 @@ static void
 ksd_push_stat_finalize_handler(stu_connection_t *c, stu_int32_t rc) {
 	c->upstream->cleanup_pt(c);
 
-	stu_timer_add_locked(&c->write, ksd_cycle->conf.push_stat_interval);
+	stu_timer_add_locked(c->write, ksd_cycle->conf.push_stat_interval);
 }

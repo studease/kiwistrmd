@@ -1,7 +1,7 @@
 /*
  * stu_os.c
  *
- *  Created on: 2018Äê3ÔÂ30ÈÕ
+ *  Created on: 2018ï¿½ï¿½3ï¿½ï¿½30ï¿½ï¿½
  *      Author: Tony Lau
  */
 
@@ -226,7 +226,6 @@ stu_udp_unix_send(stu_connection_t *c, u_char *buf, size_t size) {
 		err = stu_socket_errno;
 
 		if (err == STU_EAGAIN) {
-			wev->ready = 0;
 			stu_log_error(STU_EAGAIN, "sendto() not ready");
 			return STU_AGAIN;
 		}
@@ -287,8 +286,6 @@ stu_udp_unix_recv(stu_connection_t *c, u_char *buf, size_t size) {
 			break;
 		}
 	} while (err == STU_EINTR);
-
-	rev->ready = 0;
 
 	if (n == STU_ERROR) {
 		rev->error = 1;

@@ -39,13 +39,14 @@ typedef struct {
 } stu_rtmp_data_listener_t;
 
 struct stu_rtmp_request_s {
-	stu_rtmp_connection_t       connection;
+	stu_rtmp_netconnection_t    connection;
 
 	stu_rtmp_event_handler_pt   read_event_handler;
 	stu_rtmp_event_handler_pt   write_event_handler;
 
 	stu_queue_t                 chunks;
 	stu_rtmp_chunk_t           *chunk_in;
+	stu_rtmp_netstream_t      **streams;
 
 	stu_uint32_t                chunk_size;
 	stu_uint32_t                chunk_stream_id;
@@ -77,7 +78,6 @@ struct stu_rtmp_request_s {
 	stu_double_t                duration;
 	stu_bool_t                  reset;
 	stu_bool_t                  flag;
-	stu_str_t                  *publishing_name;
 	stu_str_t                  *publishing_type;
 	stu_double_t                milliseconds;
 
@@ -92,6 +92,9 @@ stu_rtmp_request_t *
       stu_rtmp_create_request(stu_connection_t *c);
 void  stu_rtmp_process_request(stu_rtmp_request_t *r);
 void  stu_rtmp_finalize_request(stu_rtmp_request_t *r, stu_int32_t rc);
+
+stu_rtmp_netstream_t *
+      stu_rtmp_find_netstream(stu_rtmp_request_t *r, stu_uint32_t stream_id);
 
 void  stu_rtmp_free_request(stu_rtmp_request_t *r);
 void  stu_rtmp_close_request(stu_rtmp_request_t *r);

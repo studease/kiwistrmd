@@ -8,12 +8,12 @@
 #include "../stu_config.h"
 #include "stu_core.h"
 
-stu_queue_t  stu_freed;
+stu_queue_t  stu_conn_freed;
 
 
 stu_int32_t
 stu_connection_init() {
-	stu_queue_init(&stu_freed);
+	stu_queue_init(&stu_conn_freed);
 	return STU_OK;
 }
 
@@ -44,7 +44,7 @@ stu_connect(stu_connection_t *c, stu_addr_t *addr) {
 	}
 
 	rc = stu_connectex(c->fd, (struct sockaddr *) &addr->sockaddr, addr->socklen, NULL, 0, &bytes, ovlp);
-#elif
+#else
 	rc = connect(c->fd, (struct sockaddr *) &addr->sockaddr, addr->socklen);
 #endif
 
@@ -157,7 +157,7 @@ stu_connection_close(stu_connection_t *c) {
 	stu_log_debug(3, "freed connection: c=0x%p, fd=%d.", c, fd);
 
 	c->destroyed = TRUE;
-	stu_queue_insert_tail(&stu_freed, &c->queue);
+	stu_queue_insert_tail(&stu_conn_freed, &c->queue);
 }
 
 void
