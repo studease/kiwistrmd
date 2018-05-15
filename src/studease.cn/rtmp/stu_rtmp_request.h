@@ -23,21 +23,6 @@ typedef struct {
 	stu_uint16_t                mask;
 } stu_rtmp_method_bitmask_t;
 
-typedef struct {
-	stu_uint8_t                 type_id;
-	stu_int32_t               (*handler)(stu_rtmp_request_t *r);
-} stu_rtmp_message_listener_t;
-
-typedef struct {
-	stu_str_t                   name;
-	stu_int32_t               (*handler)(stu_rtmp_request_t *r);
-} stu_rtmp_command_listener_t;
-
-typedef struct {
-	stu_str_t                   name;
-	stu_int32_t               (*handler)(stu_rtmp_request_t *r);
-} stu_rtmp_data_listener_t;
-
 struct stu_rtmp_request_s {
 	stu_rtmp_netconnection_t    connection;
 
@@ -68,6 +53,7 @@ struct stu_rtmp_request_s {
 	stu_str_t                  *data_key;
 	stu_rtmp_amf_t             *data_value;
 
+	stu_rtmp_amf_t             *command_name;
 	stu_str_t                  *command;
 	stu_uint32_t                transaction_id;
 	stu_rtmp_amf_t             *command_obj;
@@ -85,18 +71,18 @@ struct stu_rtmp_request_s {
 	stu_uint8_t                 state;
 };
 
-void  stu_rtmp_request_read_handler(stu_event_t *ev);
-void  stu_rtmp_request_write_handler(stu_rtmp_request_t *r);
+void         stu_rtmp_request_read_handler(stu_event_t *ev);
+void         stu_rtmp_request_write_handler(stu_rtmp_request_t *r);
 
 stu_rtmp_request_t *
-      stu_rtmp_create_request(stu_connection_t *c);
-void  stu_rtmp_process_request(stu_rtmp_request_t *r);
-void  stu_rtmp_finalize_request(stu_rtmp_request_t *r, stu_int32_t rc);
+             stu_rtmp_create_request(stu_connection_t *c);
+stu_int32_t  stu_rtmp_process_request(stu_rtmp_request_t *r);
+void         stu_rtmp_finalize_request(stu_rtmp_request_t *r, stu_int32_t rc);
 
 stu_rtmp_netstream_t *
-      stu_rtmp_find_netstream(stu_rtmp_request_t *r, stu_uint32_t stream_id);
+             stu_rtmp_find_netstream(stu_rtmp_request_t *r, stu_uint32_t stream_id);
 
-void  stu_rtmp_free_request(stu_rtmp_request_t *r);
-void  stu_rtmp_close_request(stu_rtmp_request_t *r);
+void         stu_rtmp_free_request(stu_rtmp_request_t *r);
+void         stu_rtmp_close_request(stu_rtmp_request_t *r);
 
 #endif /* STUDEASE_CN_RTMP_STU_RTMP_REQUEST_H_ */

@@ -62,14 +62,6 @@
 #define STU_RTMP_VIDEO_CODEC_SCREEN_VIDEO_2                0x06
 #define STU_RTMP_VIDEO_CODEC_AVC                           0x07
 
-typedef struct {
-	stu_uint8_t   type;      // 1 byte
-	stu_uint32_t  timestamp; // 4 bytes
-	stu_uint32_t  stream_id; // 3 bytes
-	stu_buf_t     payload;
-} stu_rtmp_message_t;
-
-
 extern stu_str_t  STU_RTMP_CMD_CONNECT;
 extern stu_str_t  STU_RTMP_CMD_CLOSE;
 extern stu_str_t  STU_RTMP_CMD_CREATE_STREAM;

@@ -54,7 +54,7 @@ static stu_int32_t  stu_rtmp_add_responder(stu_rtmp_netconnection_t *nc, stu_rtm
 
 
 void
-stu_rtmp_netconnection_init(stu_rtmp_netconnection_t *nc, stu_connection_t *c) {
+stu_rtmp_connection_init(stu_rtmp_netconnection_t *nc, stu_connection_t *c) {
 	nc->conn = c;
 	nc->far_chunk_size = STU_RTMP_CHUNK_DEFAULT_SIZE;
 	nc->near_chunk_size = STU_RTMP_CHUNK_DEFAULT_SIZE;
@@ -436,7 +436,7 @@ stu_rtmp_set_peer_bandwidth(stu_rtmp_netconnection_t *nc, stu_uint32_t bandwidth
 
 	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_PROTOCOL_CONTROL, 0, STU_RTMP_MESSAGE_TYPE_BANDWIDTH, 0, tmp, pos - tmp);
 	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to send protocol control 0x%02X: fd=%d, ack=%d, type=0x%02X.",
+		stu_log_error(0, "Failed to send protocol control 0x%02X: fd=%d, ack=%d, limit=0x%02X.",
 				STU_RTMP_MESSAGE_TYPE_BANDWIDTH, c->fd, bandwidth, limit);
 		stu_rtmp_close_connection(nc);
 		goto failed;
@@ -445,7 +445,7 @@ stu_rtmp_set_peer_bandwidth(stu_rtmp_netconnection_t *nc, stu_uint32_t bandwidth
 	nc->far_bandwidth = bandwidth;
 	nc->far_limit_type = limit;
 
-	stu_log_debug(4, "set far_bandwidth: ack=%d, type=0x%02X.", bandwidth, limit);
+	stu_log_debug(4, "set far_bandwidth: ack=%d, limit=0x%02X.", bandwidth, limit);
 
 failed:
 
@@ -652,6 +652,12 @@ stu_rtmp_on_connect(stu_rtmp_request_t *r) {
 
 	stu_rtmp_amf_delete(ao_prop);
 	stu_rtmp_amf_delete(ao_info);
+
+	stu_rtmp_amf_delete(r->command_obj);
+	stu_rtmp_amf_delete(r->arguments);
+
+	r->command_obj = NULL;
+	r->arguments = NULL;
 
 	return rc;
 }

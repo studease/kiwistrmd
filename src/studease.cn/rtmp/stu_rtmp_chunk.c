@@ -34,7 +34,7 @@ stu_rtmp_chunk_grow(stu_rtmp_chunk_t *ck, size_t size) {
 	}
 
 	buf.pos = buf.start + (ck->payload.pos - ck->payload.start);
-	buf.last = stu_memcpy(buf.start, ck->payload.start, stu_rtmp_chunk_length(ck));
+	buf.last = stu_memcpy(buf.start, ck->payload.start, ck->payload.last - ck->payload.start);
 	buf.end = buf.start + buf.size;
 
 	if (ck->payload.start) {

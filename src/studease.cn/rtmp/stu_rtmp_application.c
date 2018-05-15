@@ -7,14 +7,14 @@
 
 #include "stu_rtmp.h"
 
-static stu_int32_t  stu_rtmp_application_on_start(stu_rtmp_application_t *app);
-static stu_int32_t  stu_rtmp_application_on_stop(stu_rtmp_application_t *app);
+static stu_int32_t  stu_rtmp_application_start(stu_rtmp_application_t *app);
+static stu_int32_t  stu_rtmp_application_stop(stu_rtmp_application_t *app);
 
 stu_hash_t   stu_rtmp_apps;
 stu_queue_t  stu_rtmp_app_freed;
 
-stu_rtmp_application_handler_pt  stu_rtmp_on_application_start = stu_rtmp_application_on_start;
-stu_rtmp_application_handler_pt  stu_rtmp_on_application_stop = stu_rtmp_application_on_stop;
+stu_rtmp_application_handler_pt  stu_rtmp_application_on_start = stu_rtmp_application_start;
+stu_rtmp_application_handler_pt  stu_rtmp_application_on_stop = stu_rtmp_application_stop;
 
 
 stu_int32_t
@@ -53,7 +53,7 @@ stu_rtmp_application_init(stu_rtmp_application_t *app, u_char *name, size_t len)
 		return STU_ERROR;
 	}
 
-	if (stu_rtmp_on_application_start(app) == STU_ERROR) {
+	if (stu_rtmp_application_on_start(app) == STU_ERROR) {
 		stu_log_error(0, "Failed to start rtmp application: %s.", app->name.data);
 		return STU_ERROR;
 	}
@@ -74,7 +74,7 @@ stu_rtmp_application_cleanup(stu_rtmp_application_t *app) {
 	// cleanup
 	stu_mutex_lock(&app->lock);
 
-	stu_rtmp_on_application_stop(app);
+	stu_rtmp_application_on_stop(app);
 
 	stu_hash_destroy_locked(&app->instances, (stu_hash_cleanup_pt) stu_rtmp_instance_cleanup);
 
@@ -95,6 +95,8 @@ stu_rtmp_accept(stu_rtmp_netconnection_t *nc) {
 				nc->url.application.data, nc->url.instance.data);
 		return STU_ERROR;
 	}
+
+	nc->connected = TRUE;
 
 	stu_rtmp_set_ack_window_size(nc, 2500000);
 	stu_rtmp_set_peer_bandwidth(nc, 2500000, STU_RTMP_BANDWIDTH_LIMIT_TYPE_DYNAMIC);
@@ -229,13 +231,14 @@ stu_rtmp_application_remove_locked(stu_rtmp_netconnection_t *nc) {
 	stu_mutex_unlock(&app->lock);
 }
 
-
 static stu_int32_t
-stu_rtmp_application_on_start(stu_rtmp_application_t *app) {
+stu_rtmp_application_start(stu_rtmp_application_t *app) {
+	stu_log("rtmp application start: %s", app->name.data);
 	return STU_OK;
 }
 
 static stu_int32_t
-stu_rtmp_application_on_stop(stu_rtmp_application_t *app) {
+stu_rtmp_application_stop(stu_rtmp_application_t *app) {
+	stu_log("rtmp application stop: %s", app->name.data);
 	return STU_OK;
 }

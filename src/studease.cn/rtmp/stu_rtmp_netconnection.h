@@ -107,7 +107,7 @@ struct stu_rtmp_netconnection_s {
 	stu_uint32_t            pre_stream_id;
 };
 
-void            stu_rtmp_netconnection_init(stu_rtmp_netconnection_t *nc, stu_connection_t *c);
+void            stu_rtmp_connection_init(stu_rtmp_netconnection_t *nc, stu_connection_t *c);
 
 stu_int32_t     stu_rtmp_connect(stu_rtmp_netconnection_t *nc, u_char *url, size_t len, stu_rtmp_responder_t *res, ...);
 stu_int32_t     stu_rtmp_call(stu_rtmp_netconnection_t *nc, u_char *command, size_t len, stu_rtmp_responder_t *res, ...);

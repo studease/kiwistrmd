@@ -492,10 +492,10 @@ ksd_conf_copy_targets(stu_hash_t *hash, stu_json_t *item) {
 			server->max_fails = *v_double;
 		}
 
+		stu_memzero(&server->dst_addr.sockaddr.sin_zero, 8);
 		server->dst_addr.sockaddr.sin_family = AF_INET;
 		server->dst_addr.sockaddr.sin_addr.s_addr = inet_addr((const char *) server->dst_addr.name.data);
 		server->dst_addr.sockaddr.sin_port = htons(server->dst_port);
-		bzero(&(server->dst_addr.sockaddr.sin_zero), 8);
 		server->dst_addr.socklen = sizeof(struct sockaddr);
 
 		stu_hash_insert_locked(hash, &server->name, server);
@@ -606,10 +606,10 @@ ksd_conf_copy_upstream_servers(stu_list_t *list, stu_str_t *name, stu_json_t *it
 			server->max_fails = *v_double;
 		}
 
+		stu_memzero(&server->addr.sockaddr.sin_zero, 8);
 		server->addr.sockaddr.sin_family = AF_INET;
 		server->addr.sockaddr.sin_addr.s_addr = inet_addr((const char *) server->addr.name.data);
 		server->addr.sockaddr.sin_port = htons(server->port);
-		bzero(&(server->addr.sockaddr.sin_zero), 8);
 		server->addr.socklen = sizeof(struct sockaddr);
 
 		stu_list_insert_tail(list, server);
@@ -625,7 +625,7 @@ ksd_conf_get_default(ksd_conf_t *conf) {
 
 	// log
 	stu_gettimeofday(&tv);
-	stu_localtime(tv.tv_sec, &tm);
+	stu_gmtime(tv.tv_sec, &tm);
 
 	conf->log.name.data = stu_calloc(STU_MAX_PATH + 1);
 	if (conf->log.name.data == NULL) {

@@ -91,7 +91,6 @@ extern stu_rtmp_data_listener_t     stu_rtmp_data_listeners[];
 stu_hash_t  stu_rtmp_message_listener_hash;
 stu_hash_t  stu_rtmp_command_listener_hash;
 stu_hash_t  stu_rtmp_data_listener_hash;
-stu_hash_t  stu_rtmp_status_listener_hash;
 
 
 stu_int32_t

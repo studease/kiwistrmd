@@ -424,6 +424,7 @@ stu_rtmp_set_data_frame(stu_rtmp_netstream_t *ns, stu_str_t *key, stu_rtmp_amf_t
 	nc = ns->connection;
 	pos = tmp;
 	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
+	rc = STU_OK;
 
 	if (stu_hash_insert_locked(&ns->data_frames, key, value) == STU_ERROR) {
 		stu_log_error(0, "Failed to %s: fd=%d, key=%s, value=%p.",
@@ -436,7 +437,6 @@ stu_rtmp_set_data_frame(stu_rtmp_netstream_t *ns, stu_str_t *key, stu_rtmp_amf_t
 	}
 
 	if (remote == FALSE) {
-		rc = STU_OK;
 		goto done;
 	}
 
@@ -555,6 +555,7 @@ stu_rtmp_on_play(stu_rtmp_request_t *r) {
 	stu_int32_t               rc;
 
 	nc = &r->connection;
+	rc = STU_ERROR;
 
 	stu_log_debug(4, "Handle command \"%s\": fd=%d, /%s/%s.",
 			STU_RTMP_CMD_PLAY.data, nc->conn->fd, nc->url.application.data, r->stream_name->data);
@@ -624,7 +625,7 @@ stu_rtmp_on_delete_stream(stu_rtmp_request_t *r) {
 
 	ns = stu_rtmp_find_netstream(r, r->stream_id);
 	if (ns == NULL) {
-		goto done;
+		return STU_ERROR;
 	}
 
 	hk = stu_hash_key(ns->name.data, ns->name.len, nc->netstreams.flags);
@@ -634,8 +635,6 @@ stu_rtmp_on_delete_stream(stu_rtmp_request_t *r) {
 		r->streams[ns->id - 1] = NULL;
 		stu_rtmp_close_netstream(ns);
 	}
-
-done:
 
 	return STU_OK;
 }
@@ -738,6 +737,7 @@ stu_rtmp_on_publish(stu_rtmp_request_t *r) {
 	nc = &r->connection;
 	inst = nc->instance;
 	name = r->stream_name;
+	rc = STU_ERROR;
 
 	stu_log_debug(4, "Handle command \"%s\": fd=%d, /%s/%s.",
 			STU_RTMP_CMD_PUBLISH.data, nc->conn->fd, nc->url.application.data, r->stream_name->data);
@@ -756,7 +756,7 @@ stu_rtmp_on_publish(stu_rtmp_request_t *r) {
 		s = stu_rtmp_stream_get(name->data, name->len);
 		if (s == NULL) {
 			stu_log_error(0, "Failed to get rtmp stream: name=%s.", name->data);
-			return STU_ERROR;
+			goto failed;
 		}
 
 		rc = stu_hash_insert_locked(&inst->streams, name, s);
@@ -791,7 +791,7 @@ failed:
 
 stu_int32_t
 stu_rtmp_on_seek(stu_rtmp_request_t *r) {
-	// TODO
+	// TODO: seek
 	return STU_OK;
 }
 
@@ -823,10 +823,12 @@ stu_rtmp_on_status(stu_rtmp_request_t *r) {
 	u_char                    tmp[10];
 	stu_str_t                 key;
 	stu_uint32_t              hk;
+	stu_int32_t               rc;
 
 	nc = &r->connection;
 	ck = r->chunk_in;
 	stu_memzero(tmp, 10);
+	rc = STU_OK; // Just ignore.
 
 	stu_log_debug(4, "Handle command \"%s\": fd=%d, /%s/%d.",
 			STU_RTMP_CMD_ON_STATUS.data, nc->conn->fd, nc->url.application.data, ck->stream_id);
@@ -838,10 +840,10 @@ stu_rtmp_on_status(stu_rtmp_request_t *r) {
 
 	ns = stu_hash_find_locked(&nc->netstreams, hk, key.data, key.len);
 	if (ns && ns->on_status) {
-		return ns->on_status(r);
+		rc = ns->on_status(r);
 	}
 
-	return STU_OK; // Just ignore.
+	return rc;
 }
 
 

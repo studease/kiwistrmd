@@ -38,9 +38,6 @@ typedef struct {
 	unsigned      extended:1;
 } stu_rtmp_chunk_t;
 
-#define stu_rtmp_chunk_length(ck) \
-	(ck->payload.last - ck->payload.start)
-
 stu_int32_t  stu_rtmp_chunk_append(stu_rtmp_chunk_t *ck, u_char *data, size_t len);
 stu_int32_t  stu_rtmp_chunk_grow(stu_rtmp_chunk_t *ck, size_t size);
 void         stu_rtmp_chunk_cleanup(stu_rtmp_chunk_t *ck);

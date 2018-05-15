@@ -22,9 +22,7 @@ typedef struct {
 	stu_uint16_t  method;
 	stu_str_t     name;
 	stu_addr_t    dst_addr;
-#if (STU_LINUX)
-	in_port_t     dst_port;
-#endif
+	uint16_t      dst_port;
 	stu_str_t     dst_app;
 	stu_str_t     dst_inst;
 	stu_str_t     dst_name;

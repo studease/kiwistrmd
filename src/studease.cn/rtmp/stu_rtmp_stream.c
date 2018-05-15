@@ -39,7 +39,7 @@ stu_rtmp_stream_get(u_char *name, size_t len) {
 		goto failed;
 	}
 
-	return STU_OK;
+	return s;
 
 failed:
 

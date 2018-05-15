@@ -1,0 +1,5 @@
+#format files
+AUX_SOURCE_DIRECTORY(. DIR_STU_FORMAT_SRC)
+
+#build format
+ADD_LIBRARY(format ${DIR_STU_FORMAT_SRC})

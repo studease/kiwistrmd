@@ -42,12 +42,16 @@
 #include <winsock2.h>
 #endif
 
+#if !(STU_WIN32)
+
 #define stu_signal_helper(n)   SIG##n
 #define stu_signal_value(n)    stu_signal_helper(n)
 
 #define STU_SHUTDOWN_SIGNAL    QUIT
 #define STU_REOPEN_SIGNAL      USR1
 #define STU_CHANGEBIN_SIGNAL   USR2
+
+#endif
 
 #define STU_INT32_LEN         (sizeof("-2147483648") - 1)
 #define STU_INT64_LEN         (sizeof("-9223372036854775808") - 1)

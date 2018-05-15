@@ -10,7 +10,6 @@
 static void         stu_rtmp_process_chunk(stu_event_t *ev);
 static ssize_t      stu_rtmp_read_request_chunk(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_process_message(stu_rtmp_request_t *r);
-static stu_int32_t  stu_rtmp_filter_foreach_handler(stu_rtmp_request_t *r, stu_str_t *pattern, stu_list_t *list);
 static void         stu_rtmp_run_phases(stu_rtmp_request_t *r);
 static void         stu_rtmp_request_empty_handler(stu_rtmp_request_t *r);
 
@@ -58,17 +57,17 @@ static stu_int32_t  stu_rtmp_on_video(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_on_data(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_on_shared_object(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_on_command(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_on_aggregate(stu_rtmp_request_t *r);
 
 static stu_int32_t  stu_rtmp_on_set_data_frame(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_on_clear_data_frame(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_on_metadata(stu_rtmp_request_t *r);
 
-extern stu_hash_t  stu_rtmp_filter_hash;
-extern stu_list_t  stu_rtmp_phases;
+extern stu_hash_t   stu_rtmp_filter_hash;
+extern stu_list_t   stu_rtmp_phases;
 
-extern stu_hash_t  stu_rtmp_message_listener_hash;
-extern stu_hash_t  stu_rtmp_command_listener_hash;
-extern stu_hash_t  stu_rtmp_data_listener_hash;
+extern stu_hash_t   stu_rtmp_message_listener_hash;
+extern stu_hash_t   stu_rtmp_data_listener_hash;
 
 extern const stu_str_t  STU_RTMP_KEY_TC_URL;
 extern const stu_str_t  STU_RTMP_KEY_OBJECT_ENCODING;
@@ -94,7 +93,7 @@ stu_rtmp_message_listener_t  stu_rtmp_message_listeners[] = {
 };
 
 stu_rtmp_command_listener_t  stu_rtmp_command_listeners[] = {
-	{ stu_string("connect"),       stu_rtmp_process_command_connect },
+	{ stu_string("connect"),       stu_rtmp_on_connect },
 	{ stu_string("close"),         stu_rtmp_process_command_close },
 	{ stu_string("createStream"),  stu_rtmp_process_command_create_stream },
 	{ stu_string("_result"),       stu_rtmp_process_command_result },
@@ -203,7 +202,7 @@ stu_rtmp_create_request(stu_connection_t *c) {
 			return NULL;
 		}
 
-		stu_rtmp_netconnection_init(&r->connection, c);
+		stu_rtmp_connection_init(&r->connection, c);
 		stu_queue_init(&r->chunks);
 
 		r->streams = stu_pcalloc(c->pool, sizeof(stu_rtmp_netstream_t *) * STU_RTMP_NETSTREAM_MAXIMAM);
@@ -262,7 +261,12 @@ stu_rtmp_process_chunk(stu_event_t *ev) {
 				return;
 			}
 
-			stu_rtmp_process_request(r);
+			rc = stu_rtmp_process_request(r);
+			if (rc != STU_OK) {
+				stu_log_error(0, "Failed to process rtmp request.");
+				stu_rtmp_finalize_request(r, STU_ERROR);
+				return;
+			}
 
 			if (c->buffer.pos == c->buffer.last) {
 				c->buffer.pos = c->buffer.last = c->buffer.start;
@@ -273,7 +277,7 @@ stu_rtmp_process_chunk(stu_event_t *ev) {
 		}
 
 		if (rc == STU_AGAIN) {
-			stu_log_debug(4, "rtmp message parsing is still not complete.");
+			stu_log_debug(3, "rtmp message parsing is still not complete.");
 			continue;
 		}
 
@@ -521,7 +525,7 @@ stu_rtmp_process_audio(stu_rtmp_request_t *r) {
 
 	r->data_type = *pos++;
 
-	return stu_rtmp_on_audio(r);
+	return STU_OK;
 }
 
 static stu_int32_t
@@ -545,18 +549,21 @@ stu_rtmp_process_video(stu_rtmp_request_t *r) {
 
 	r->data_type = *pos++;
 
-	return stu_rtmp_on_video(r);
+	return STU_OK;
 }
 
 static stu_int32_t
 stu_rtmp_process_data(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
-	stu_buf_t        *buf;
 	stu_rtmp_amf_t   *v, *ai_hdlr, *ai_key;
+	stu_buf_t        *buf;
 	stu_int32_t       rc;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	ai_hdlr = NULL;
+	ai_key = NULL;
+	rc = STU_ERROR;
 
 	// handler
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
@@ -570,9 +577,9 @@ stu_rtmp_process_data(stu_rtmp_request_t *r) {
 
 	ai_hdlr = v;
 
-	if (stu_strncmp(STU_RTMP_SET_DATA_FRAME.data, r->data_handler->data, r->data_handler->len) == 0 ||
-			stu_strncmp(STU_RTMP_CLEAR_DATA_FRAME.data, r->data_handler->data, r->data_handler->len) == 0) {
-		r->data_key = NULL;
+	if (stu_strncmp(STU_RTMP_SET_DATA_FRAME.data, r->data_handler->data, r->data_handler->len) != 0 &&
+			stu_strncmp(STU_RTMP_CLEAR_DATA_FRAME.data, r->data_handler->data, r->data_handler->len) != 0) {
+		r->data_key = r->data_handler;
 		ai_key = NULL;
 		goto value;
 	}
@@ -581,7 +588,7 @@ stu_rtmp_process_data(stu_rtmp_request_t *r) {
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp message of data: Bad AMF format[2].");
-		goto done;
+		goto failed;
 	}
 
 	r->data_key = (stu_str_t *) v->value;
@@ -604,11 +611,10 @@ value:
 				r->data_handler->data, r->data_key ? r->data_key->data : NULL);
 	}
 
-done:
+failed:
 
 	stu_rtmp_amf_delete(ai_hdlr);
 	stu_rtmp_amf_delete(ai_key);
-	stu_rtmp_amf_delete(r->data_value);
 
 	return rc;
 }
@@ -621,13 +627,12 @@ stu_rtmp_process_shared_object(stu_rtmp_request_t *r) {
 static stu_int32_t
 stu_rtmp_process_command(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
+	stu_rtmp_amf_t   *v;
 	stu_buf_t        *buf;
-	stu_rtmp_amf_t   *v, *ai_cmd;
 	stu_int32_t       rc;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
-
 	rc = STU_ERROR;
 
 	if (buf->last - buf->pos < 7) {
@@ -639,19 +644,19 @@ stu_rtmp_process_command(stu_rtmp_request_t *r) {
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[1].");
-		return STU_ERROR;
+		goto failed;
 	}
 
 	r->command = (stu_str_t *) v->value;
 	buf->pos += v->cost;
 
-	ai_cmd = v;
+	r->command_name = v;
 
 	// transaction id
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[2].");
-		goto done;
+		goto failed;
 	}
 
 	r->transaction_id = *(stu_double_t *) v->value;
@@ -659,15 +664,9 @@ stu_rtmp_process_command(stu_rtmp_request_t *r) {
 
 	stu_rtmp_amf_delete(v);
 
-	// handler
-	rc = stu_rtmp_on_command(r);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to handle rtmp command: %s.", r->command->data);
-	}
+	rc = STU_OK;
 
-done:
-
-	stu_rtmp_amf_delete(ai_cmd);
+failed:
 
 	return rc;
 }
@@ -676,32 +675,32 @@ static stu_int32_t
 stu_rtmp_process_command_connect(stu_rtmp_request_t *r) {
 	stu_rtmp_netconnection_t *nc;
 	stu_rtmp_chunk_t         *ck;
-	stu_buf_t                *buf;
 	stu_rtmp_amf_t           *v, *item;
-	stu_str_t                *str;
+	stu_buf_t                *buf;
+	stu_str_t                *url;
 	stu_int32_t               rc;
 
 	nc = &r->connection;
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	rc = STU_ERROR;
 
 	// command object
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp message of command: Bad AMF format[3].");
-		return STU_ERROR;
+		goto failed;
 	}
 
 	item = stu_rtmp_amf_get_object_item_by(v, (stu_str_t *) &STU_RTMP_KEY_TC_URL);
 	if (item && item->type == STU_RTMP_AMF_STRING) {
-		str = (stu_str_t *) item->value;
+		url = (stu_str_t *) item->value;
 
-		nc->url.len = str->len;
-		nc->url.data = stu_pcalloc(nc->conn->pool, str->len + 1);
-		stu_strncpy(nc->url.data, str->data, str->len);
+		nc->url.len = url->len;
+		nc->url.data = stu_pcalloc(nc->conn->pool, url->len + 1);
+		stu_strncpy(nc->url.data, url->data, url->len);
 
-		rc = stu_rtmp_parse_url(&nc->url, nc->url.data, nc->url.len);
-		if (rc == STU_ERROR) {
+		if (stu_rtmp_parse_url(&nc->url, nc->url.data, nc->url.len) == STU_ERROR) {
 			stu_log_error(0, "Failed to parse rtmp url.");
 			goto failed;
 		}
@@ -721,16 +720,9 @@ stu_rtmp_process_command_connect(stu_rtmp_request_t *r) {
 	r->arguments = v;
 	buf->pos += v ? v->cost : 0;
 
-	// handler
-	rc = stu_rtmp_on_connect(r);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to handle rtmp command: %s.", r->command->data);
-	}
+	rc = STU_OK;
 
 failed:
-
-	stu_rtmp_amf_delete(r->command_obj);
-	stu_rtmp_amf_delete(r->arguments);
 
 	return rc;
 }
@@ -751,18 +743,19 @@ stu_rtmp_process_command_close(stu_rtmp_request_t *r) {
 static stu_int32_t
 stu_rtmp_process_command_create_stream(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
-	stu_buf_t        *buf;
 	stu_rtmp_amf_t   *v;
+	stu_buf_t        *buf;
 	stu_int32_t       rc;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	rc = STU_ERROR;
 
 	// command object
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp command: %s.", r->command->data);
-		return STU_ERROR;
+		goto failed;
 	}
 
 	r->command_obj = v;
@@ -774,7 +767,11 @@ stu_rtmp_process_command_create_stream(stu_rtmp_request_t *r) {
 		stu_log_error(0, "Failed to handle rtmp command: %s.", r->command->data);
 	}
 
+failed:
+
 	stu_rtmp_amf_delete(r->command_obj);
+
+	r->command_obj = NULL;
 
 	return rc;
 }
@@ -782,18 +779,19 @@ stu_rtmp_process_command_create_stream(stu_rtmp_request_t *r) {
 static stu_int32_t
 stu_rtmp_process_command_result(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
-	stu_buf_t        *buf;
 	stu_rtmp_amf_t   *v;
+	stu_buf_t        *buf;
 	stu_int32_t       rc;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	rc = STU_ERROR;
 
 	// command object
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp command: %s.", r->command->data);
-		return STU_ERROR;
+		goto failed;
 	}
 
 	r->command_obj = v;
@@ -820,24 +818,28 @@ failed:
 	stu_rtmp_amf_delete(r->command_obj);
 	stu_rtmp_amf_delete(r->arguments);
 
+	r->command_obj = NULL;
+	r->arguments = NULL;
+
 	return rc;
 }
 
 static stu_int32_t
 stu_rtmp_process_command_error(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
-	stu_buf_t        *buf;
 	stu_rtmp_amf_t   *v;
+	stu_buf_t        *buf;
 	stu_int32_t       rc;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	rc = STU_ERROR;
 
 	// command object
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp command: %s.", r->command->data);
-		return STU_ERROR;
+		goto failed;
 	}
 
 	r->command_obj = v;
@@ -864,24 +866,29 @@ failed:
 	stu_rtmp_amf_delete(r->command_obj);
 	stu_rtmp_amf_delete(r->arguments);
 
+	r->command_obj = NULL;
+	r->arguments = NULL;
+
 	return rc;
 }
 
 static stu_int32_t
 stu_rtmp_process_command_play(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
-	stu_buf_t        *buf;
 	stu_rtmp_amf_t   *v, *ai_name;
+	stu_buf_t        *buf;
 	stu_int32_t       rc;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	ai_name = NULL;
+	rc = STU_ERROR;
 
 	// command object
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp command: %s.", r->command->data);
-		return STU_ERROR;
+		goto failed;
 	}
 
 	r->command_obj = v; // null
@@ -929,11 +936,12 @@ stu_rtmp_process_command_play(stu_rtmp_request_t *r) {
 		stu_log_error(0, "Failed to handle rtmp command: %s.", r->command->data);
 	}
 
-	stu_rtmp_amf_delete(ai_name);
-
 failed:
 
 	stu_rtmp_amf_delete(r->command_obj);
+	stu_rtmp_amf_delete(ai_name);
+
+	r->command_obj = NULL;
 
 	return rc;
 }
@@ -941,18 +949,19 @@ failed:
 static stu_int32_t
 stu_rtmp_process_command_play2(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
-	stu_buf_t        *buf;
 	stu_rtmp_amf_t   *v;
+	stu_buf_t        *buf;
 	stu_int32_t       rc;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	rc = STU_ERROR;
 
 	// command object
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp command: %s.", r->command->data);
-		return STU_ERROR;
+		goto failed;
 	}
 
 	r->command_obj = v; // null
@@ -979,24 +988,29 @@ failed:
 	stu_rtmp_amf_delete(r->command_obj);
 	stu_rtmp_amf_delete(r->arguments);
 
+	r->command_obj = NULL;
+	r->arguments = NULL;
+
 	return rc;
 }
 
 static stu_int32_t
 stu_rtmp_process_command_release_stream(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
-	stu_buf_t        *buf;
 	stu_rtmp_amf_t   *v, *ai_name;
+	stu_buf_t        *buf;
 	stu_int32_t       rc;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	ai_name = NULL;
+	rc = STU_ERROR;
 
 	// command object
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp command: %s.", r->command->data);
-		return STU_ERROR;
+		goto failed;
 	}
 
 	r->command_obj = v; // null
@@ -1020,11 +1034,12 @@ stu_rtmp_process_command_release_stream(stu_rtmp_request_t *r) {
 		stu_log_error(0, "Failed to handle rtmp command: %s.", r->command->data);
 	}
 
-	stu_rtmp_amf_delete(ai_name);
-
 failed:
 
 	stu_rtmp_amf_delete(r->command_obj);
+	stu_rtmp_amf_delete(ai_name);
+
+	r->command_obj = NULL;
 
 	return rc;
 }
@@ -1032,18 +1047,19 @@ failed:
 static stu_int32_t
 stu_rtmp_process_command_delete_stream(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
-	stu_buf_t        *buf;
 	stu_rtmp_amf_t   *v;
+	stu_buf_t        *buf;
 	stu_int32_t       rc;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	rc = STU_ERROR;
 
 	// command object
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp command: %s.", r->command->data);
-		return STU_ERROR;
+		goto failed;
 	}
 
 	r->command_obj = v; // null
@@ -1071,7 +1087,9 @@ failed:
 
 	stu_rtmp_amf_delete(r->command_obj);
 
-	return rc;
+	r->command_obj = NULL;
+
+	return STU_ERROR;
 }
 
 static stu_int32_t
@@ -1090,18 +1108,19 @@ stu_rtmp_process_command_close_stream(stu_rtmp_request_t *r) {
 static stu_int32_t
 stu_rtmp_process_command_receive_audio(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
-	stu_buf_t        *buf;
 	stu_rtmp_amf_t   *v;
+	stu_buf_t        *buf;
 	stu_int32_t       rc;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	rc = STU_ERROR;
 
 	// command object
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp command: %s.", r->command->data);
-		return STU_ERROR;
+		goto failed;
 	}
 
 	r->command_obj = v; // null
@@ -1129,24 +1148,27 @@ failed:
 
 	stu_rtmp_amf_delete(r->command_obj);
 
+	r->command_obj = NULL;
+
 	return rc;
 }
 
 static stu_int32_t
 stu_rtmp_process_command_receive_video(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
-	stu_buf_t        *buf;
 	stu_rtmp_amf_t   *v;
+	stu_buf_t        *buf;
 	stu_int32_t       rc;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	rc = STU_ERROR;
 
 	// command object
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp command: %s.", r->command->data);
-		return STU_ERROR;
+		goto failed;
 	}
 
 	r->command_obj = v; // null
@@ -1174,24 +1196,28 @@ failed:
 
 	stu_rtmp_amf_delete(r->command_obj);
 
+	r->command_obj = NULL;
+
 	return rc;
 }
 
 static stu_int32_t
 stu_rtmp_process_command_fcpublish(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
+	stu_rtmp_amf_t   *v, *ai_name;
 	stu_buf_t        *buf;
-	stu_rtmp_amf_t   *v;
 	stu_int32_t       rc;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	ai_name = NULL;
+	rc = STU_ERROR;
 
 	// command object
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp command: %s.", r->command->data);
-		return STU_ERROR;
+		goto failed;
 	}
 
 	r->command_obj = v; // null
@@ -1207,17 +1233,20 @@ stu_rtmp_process_command_fcpublish(stu_rtmp_request_t *r) {
 	r->stream_name = (stu_str_t *) v->value;
 	buf->pos += v->cost;
 
+	ai_name = v;
+
 	// handler
 	rc = stu_rtmp_on_fcpublish(r);
 	if (rc == STU_ERROR) {
 		stu_log_error(0, "Failed to handle rtmp command: %s.", r->command->data);
 	}
 
-	stu_rtmp_amf_delete(v);
-
 failed:
 
 	stu_rtmp_amf_delete(r->command_obj);
+	stu_rtmp_amf_delete(ai_name);
+
+	r->command_obj = NULL;
 
 	return rc;
 }
@@ -1225,12 +1254,15 @@ failed:
 static stu_int32_t
 stu_rtmp_process_command_publish(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
-	stu_buf_t        *buf;
 	stu_rtmp_amf_t   *v, *ai_name, *ai_type;
+	stu_buf_t        *buf;
 	stu_int32_t       rc;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	ai_name = NULL;
+	ai_type = NULL;
+	rc = STU_ERROR;
 
 	// command object
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
@@ -1272,12 +1304,13 @@ stu_rtmp_process_command_publish(stu_rtmp_request_t *r) {
 		stu_log_error(0, "Failed to handle rtmp command: %s.", r->command->data);
 	}
 
-	stu_rtmp_amf_delete(ai_name);
-	stu_rtmp_amf_delete(ai_type);
-
 failed:
 
 	stu_rtmp_amf_delete(r->command_obj);
+	stu_rtmp_amf_delete(ai_name);
+	stu_rtmp_amf_delete(ai_type);
+
+	r->command_obj = NULL;
 
 	return rc;
 }
@@ -1285,18 +1318,19 @@ failed:
 static stu_int32_t
 stu_rtmp_process_command_seek(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
-	stu_buf_t        *buf;
 	stu_rtmp_amf_t   *v;
+	stu_buf_t        *buf;
 	stu_int32_t       rc;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	rc = STU_ERROR;
 
 	// command object
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp command: %s.", r->command->data);
-		return STU_ERROR;
+		goto failed;
 	}
 
 	r->command_obj = v; // null
@@ -1324,24 +1358,27 @@ failed:
 
 	stu_rtmp_amf_delete(r->command_obj);
 
+	r->command_obj = NULL;
+
 	return rc;
 }
 
 static stu_int32_t
 stu_rtmp_process_command_pause(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
-	stu_buf_t        *buf;
 	stu_rtmp_amf_t   *v;
+	stu_buf_t        *buf;
 	stu_int32_t       rc;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	rc = STU_ERROR;
 
 	// command object
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp command: %s.", r->command->data);
-		return STU_ERROR;
+		goto failed;
 	}
 
 	r->command_obj = v; // null
@@ -1381,24 +1418,27 @@ failed:
 
 	stu_rtmp_amf_delete(r->command_obj);
 
+	r->command_obj = NULL;
+
 	return rc;
 }
 
 static stu_int32_t
 stu_rtmp_process_command_on_status(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
-	stu_buf_t        *buf;
 	stu_rtmp_amf_t   *v;
+	stu_buf_t        *buf;
 	stu_int32_t       rc;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	rc = STU_ERROR;
 
 	// command object
 	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp command: %s.", r->command->data);
-		return STU_ERROR;
+		goto failed;
 	}
 
 	r->command_obj = v; // null
@@ -1425,65 +1465,54 @@ failed:
 	stu_rtmp_amf_delete(r->command_obj);
 	stu_rtmp_amf_delete(r->arguments);
 
+	r->command_obj = NULL;
+	r->arguments = NULL;
+
 	return rc;
 }
 
 static stu_int32_t
 stu_rtmp_process_aggregate(stu_rtmp_request_t *r) {
-	stu_rtmp_chunk_t *ck, sub;
-	stu_buf_t        *buf;
-
-	ck = r->chunk_in;
-	buf = &ck->payload;
-
-	if (buf->last - buf->pos < 11) {
-		stu_log_error(0, "Failed to parse rtmp message of aggregate: Data not enough.");
-		return STU_ERROR;
-	}
-
-	r->chunk_in = &sub;
-
-	stu_queue_init(&sub.queue);
-	sub.fmt = ck->fmt;
-	sub.csid = ck->csid;
-
-	for (/* void */; buf->pos < buf->last; /* void */) {
-		sub.type_id = *buf->pos++;
-
-		sub.payload.size  = *buf->pos++ << 16;
-		sub.payload.size |= *buf->pos++ << 8;
-		sub.payload.size |= *buf->pos++;
-
-		sub.timestamp  = *buf->pos++ << 16;
-		sub.timestamp |= *buf->pos++ << 8;
-		sub.timestamp |= *buf->pos++;
-		sub.timestamp |= *buf->pos++ << 24;
-
-		sub.stream_id  = *buf->pos++ << 16;
-		sub.stream_id |= *buf->pos++ << 8;
-		sub.stream_id |= *buf->pos++;
-
-		sub.payload.start = sub.payload.pos = buf->pos;
-		sub.payload.end = sub.payload.last = buf->pos + sub.payload.size;
-
-		if (sub.payload.last > buf->last) {
-			stu_log_error(0, "Failed to parse rtmp message of aggregate: Bad payload length.");
-			return STU_ERROR;
-		}
-
-		if (stu_rtmp_process_message(r) == STU_ERROR) {
-			stu_log_error(0, "Failed to parse rtmp message of aggregate.");
-			return STU_ERROR;
-		}
-
-		buf->pos += sub.payload.size + 4;
-	}
-
-	r->chunk_in = ck;
-
 	return STU_OK;
 }
 
+stu_int32_t
+stu_rtmp_process_request(stu_rtmp_request_t *r) {
+	stu_rtmp_chunk_t *ck;
+	stu_connection_t *c;
+	stu_int32_t       rc;
+
+	ck = r->chunk_in;
+	c = r->connection.conn;
+
+	if (c->read->timer_set) {
+		stu_timer_del(c->read);
+	}
+
+	switch (ck->type_id) {
+	case STU_RTMP_MESSAGE_TYPE_AUDIO:
+		rc = stu_rtmp_on_audio(r);
+		break;
+
+	case STU_RTMP_MESSAGE_TYPE_VIDEO:
+		rc = stu_rtmp_on_video(r);
+		break;
+
+	case STU_RTMP_MESSAGE_TYPE_COMMAND:
+		rc = stu_rtmp_on_command(r);
+		break;
+
+	case STU_RTMP_MESSAGE_TYPE_AGGREGATE:
+		rc = stu_rtmp_on_aggregate(r);
+		break;
+
+	default:
+		rc = STU_OK;
+		break;
+	}
+
+	return rc;
+}
 
 static stu_int32_t
 stu_rtmp_on_set_chunk_size(stu_rtmp_request_t *r) {
@@ -1521,24 +1550,15 @@ static stu_int32_t
 stu_rtmp_on_user_control(stu_rtmp_request_t *r) {
 	stu_rtmp_netconnection_t *nc;
 	stu_rtmp_netstream_t     *ns;
-	u_char                    tmp[10];
-	stu_str_t                 key;
-	stu_uint32_t              hk;
 
 	nc = &r->connection;
-	stu_memzero(tmp, 10);
 
-	stu_log_debug(4, "rtmp user control: type=%d, stream=%d, timestamp=%d, buffer=%d.",
-			r->event_type, r->stream_id, r->timestamp, r->buffer_length);
+	stu_log_debug(4, "rtmp user control: fd=%d, type=%d, stream=%d, timestamp=%d, buffer=%d.",
+			nc->conn->fd, r->event_type, r->stream_id, r->timestamp, r->buffer_length);
 
 	switch (r->event_type) {
 	case STU_RTMP_EVENT_TYPE_SET_BUFFER_LENGTH:
-		key.data = tmp;
-		key.len = stu_sprintf(tmp, "%u", r->stream_id) - tmp;
-
-		hk = stu_hash_key(key.data, key.len, nc->netstreams.flags);
-
-		ns = stu_hash_find_locked(&nc->netstreams, hk, key.data, key.len);
+		ns = stu_rtmp_find_netstream(r, r->stream_id);
 		if (ns == NULL) {
 			return STU_ERROR;
 		}
@@ -1605,18 +1625,116 @@ stu_rtmp_on_shared_object(stu_rtmp_request_t *r) {
 static stu_int32_t
 stu_rtmp_on_command(stu_rtmp_request_t *r) {
 	stu_rtmp_command_listener_t *l;
+	stu_rtmp_netconnection_t    *nc;
+	stu_rtmp_filter_t           *f;
+	stu_list_elt_t              *elts;
+	stu_hash_elt_t              *e;
+	stu_queue_t                 *q;
 	stu_uint32_t                 hk;
 	stu_int32_t                  rc;
 
-	hk = stu_hash_key(r->command->data, r->command->len, stu_rtmp_command_listener_hash.flags);
+	nc = &r->connection;
+	rc = STU_ERROR;
 
-	l = stu_hash_find_locked(&stu_rtmp_command_listener_hash, hk, r->command->data, r->command->len);
-	if (l && l->handler) {
-		rc = l->handler(r);
-	} else {
-		stu_log_debug(4, "Unrecognized rtmp command: %s.", r->command->data);
-		rc = STU_OK; // Just ignore this command.
+	stu_log_debug(4, "Handle rtmp command \"%s\": fd=%d.", r->command->data, nc->conn->fd);
+
+	if (stu_strncmp(STU_RTMP_CMD_CONNECT.data, r->command->data, r->command->len) == 0) {
+		if (stu_rtmp_process_command_connect(r) == STU_ERROR) {
+			goto failed;
+		}
 	}
+
+	// TODO: use rwlock
+	stu_mutex_lock(&stu_rtmp_filter_hash.lock);
+
+	elts = &stu_rtmp_filter_hash.keys->elts;
+
+	for (q = stu_queue_tail(&elts->queue); q != stu_queue_sentinel(&elts->queue); q = stu_queue_prev(q)) {
+		e = stu_queue_data(q, stu_hash_elt_t, queue);
+		f = e->value;
+
+		if (stu_strncasecmp(nc->url.application.data, f->pattern.data, f->pattern.len) != 0) {
+			continue;
+		}
+
+		hk = stu_hash_key(r->command->data, r->command->len, f->listeners->flags);
+
+		l = stu_hash_find(f->listeners, hk, r->command->data, r->command->len);
+		if (l && l->handler) {
+			rc = l->handler(r);
+			goto done;
+		}
+	}
+
+	stu_log_debug(4, "Unrecognized rtmp command: %s.", r->command->data);
+
+done:
+
+	stu_mutex_unlock(&stu_rtmp_filter_hash.lock);
+
+failed:
+
+	stu_rtmp_amf_delete(r->command_name);
+
+	return rc;
+}
+
+static stu_int32_t
+stu_rtmp_on_aggregate(stu_rtmp_request_t *r) {
+	stu_rtmp_chunk_t *ck, sub;
+	stu_buf_t        *buf;
+	stu_int32_t       rc;
+
+	ck = r->chunk_in;
+	buf = &ck->payload;
+	rc = STU_ERROR;
+
+	if (buf->last - buf->pos < 11) {
+		stu_log_error(0, "Failed to parse rtmp message of aggregate: Data not enough.");
+		return STU_ERROR;
+	}
+
+	r->chunk_in = &sub;
+
+	stu_queue_init(&sub.queue);
+	sub.fmt = ck->fmt;
+	sub.csid = ck->csid;
+
+	for (/* void */; buf->pos < buf->last; /* void */) {
+		sub.type_id = *buf->pos++;
+
+		sub.payload.size  = *buf->pos++ << 16;
+		sub.payload.size |= *buf->pos++ << 8;
+		sub.payload.size |= *buf->pos++;
+
+		sub.timestamp  = *buf->pos++ << 16;
+		sub.timestamp |= *buf->pos++ << 8;
+		sub.timestamp |= *buf->pos++;
+		sub.timestamp |= *buf->pos++ << 24;
+
+		sub.stream_id  = *buf->pos++ << 16;
+		sub.stream_id |= *buf->pos++ << 8;
+		sub.stream_id |= *buf->pos++;
+
+		sub.payload.start = sub.payload.pos = buf->pos;
+		sub.payload.end = sub.payload.last = buf->pos + sub.payload.size;
+
+		if (sub.payload.last > buf->last) {
+			stu_log_error(0, "Failed to parse rtmp message of aggregate: Bad payload length.");
+			rc = STU_ERROR;
+			break;
+		}
+
+		rc = stu_rtmp_process_request(r);
+		if (rc == STU_ERROR) {
+			stu_log_error(0, "Failed to parse rtmp message of aggregate: ");
+			break;
+		}
+
+		buf->pos += sub.payload.size + 4;
+	}
+
+	r->chunk_in = ck;
 
 	return rc;
 }
@@ -1626,117 +1744,61 @@ static stu_int32_t
 stu_rtmp_on_set_data_frame(stu_rtmp_request_t *r) {
 	stu_rtmp_netconnection_t *nc;
 	stu_rtmp_netstream_t     *ns;
-	stu_rtmp_chunk_t      *ck;
-	u_char                 tmp[10];
-	stu_str_t              key;
-	stu_uint32_t           hk;
+	stu_rtmp_chunk_t         *ck;
+	stu_int32_t               rc;
 
 	nc = &r->connection;
 	ck = r->chunk_in;
-	stu_memzero(tmp, 10);
 
-	key.data = tmp;
-	key.len = stu_sprintf(tmp, "%u", ck->stream_id) - tmp;
-
-	hk = stu_hash_key(key.data, key.len, nc->netstreams.flags);
-
-	ns = stu_hash_find_locked(&nc->netstreams, hk, key.data, key.len);
-	if (ns) {
-		stu_rtmp_finalize_request(r, STU_DECLINED);
-		return stu_rtmp_set_data_frame(ns, r->data_key, r->data_value, FALSE);
+	ns = stu_rtmp_find_netstream(r, ck->stream_id);
+	if (ns == NULL) {
+		stu_log_error(0, "rtmp net stream not found: fd=%d, id=%d.", nc->conn->fd, ck->stream_id);
+		return STU_ERROR;
 	}
 
-	stu_log_error(0, "Failed to set rtmp data frame: %s.", r->data_key->data);
+	rc = stu_rtmp_set_data_frame(ns, r->data_key, r->data_value, FALSE);
+	if (rc == STU_ERROR) {
+		stu_log_error(0, "Failed to set rtmp data frame: fd=%d, key=%s.", nc->conn->fd, r->data_key->data);
+		return STU_ERROR;
+	}
 
-	return STU_ERROR;
+	stu_rtmp_finalize_request(r, STU_DECLINED);
+
+	return STU_OK;
 }
 
 static stu_int32_t
 stu_rtmp_on_clear_data_frame(stu_rtmp_request_t *r) {
 	stu_rtmp_netconnection_t *nc;
 	stu_rtmp_netstream_t     *ns;
-	stu_rtmp_chunk_t      *ck;
-	u_char                 tmp[10];
-	stu_str_t              key;
-	stu_uint32_t           hk;
+	stu_rtmp_chunk_t         *ck;
+	stu_int32_t               rc;
 
 	nc = &r->connection;
 	ck = r->chunk_in;
-	stu_memzero(tmp, 10);
 
-	key.data = tmp;
-	key.len = stu_sprintf(tmp, "%u", ck->stream_id) - tmp;
-
-	hk = stu_hash_key(key.data, key.len, nc->netstreams.flags);
-
-	ns = stu_hash_find_locked(&nc->netstreams, hk, key.data, key.len);
-	if (ns) {
-		stu_rtmp_finalize_request(r, STU_DECLINED);
-		return stu_rtmp_clear_data_frame(ns, r->data_key, FALSE);
+	ns = stu_rtmp_find_netstream(r, ck->stream_id);
+	if (ns == NULL) {
+		stu_log_error(0, "rtmp net stream not found: fd=%d, id=%d.", nc->conn->fd, ck->stream_id);
+		return STU_ERROR;
 	}
 
-	stu_log_error(0, "Failed to clear rtmp data frame: %s.", r->data_key->data);
+	rc = stu_rtmp_clear_data_frame(ns, r->data_key, FALSE);
+	if (rc == STU_ERROR) {
+		stu_log_error(0, "Failed to clear rtmp data frame: fd=%d, key=%s.", nc->conn->fd, r->data_key->data);
+		return STU_ERROR;
+	}
+
+	stu_rtmp_finalize_request(r, STU_DECLINED);
 
 	return STU_ERROR;
 }
 
 static stu_int32_t
 stu_rtmp_on_metadata(stu_rtmp_request_t *r) {
-	r->data_key = &STU_RTMP_ON_META_DATA;
 	return stu_rtmp_on_set_data_frame(r);
 }
 
-
-void
-stu_rtmp_process_request(stu_rtmp_request_t *r) {
-	stu_connection_t *c;
-	stu_list_elt_t   *elts;
-	stu_hash_elt_t   *e;
-	stu_queue_t      *q;
-
-	c = r->connection.conn;
-
-	if (c->read->timer_set) {
-		stu_timer_del(c->read);
-	}
-
-	// TODO: use rwlock
-	stu_mutex_lock(&stu_rtmp_filter_hash.lock);
-
-	elts = &stu_rtmp_filter_hash.keys->elts;
-
-	for (q = stu_queue_head(&elts->queue); q != stu_queue_sentinel(&elts->queue); q = stu_queue_next(q)) {
-		e = stu_queue_data(q, stu_hash_elt_t, queue);
-
-		if (stu_rtmp_filter_foreach_handler(r, &e->key, (stu_list_t *) e->value) == STU_OK) {
-			goto done;
-		}
-	}
-
-done:
-
-	stu_mutex_unlock(&stu_rtmp_filter_hash.lock);
-}
-
-static stu_int32_t
-stu_rtmp_filter_foreach_handler(stu_rtmp_request_t *r, stu_str_t *pattern, stu_list_t *list) {
-	stu_list_elt_t    *elts, *e;
-	stu_queue_t       *q;
-	stu_rtmp_filter_t *f;
-
-	elts = &list->elts;
-
-	for (q = stu_queue_tail(&elts->queue); q != stu_queue_sentinel(&elts->queue); q = stu_queue_prev(q)) {
-		e = stu_queue_data(q, stu_list_elt_t, queue);
-		f = (stu_rtmp_filter_t *) e->value;
-
-		if (f && f->handler && f->handler(r) == STU_OK) {
-			return STU_OK;
-		}
-	}
-
-	return STU_DECLINED;
-}
 
 void
 stu_rtmp_request_write_handler(stu_rtmp_request_t *r) {
@@ -1764,9 +1826,9 @@ stu_rtmp_finalize_request(stu_rtmp_request_t *r, stu_int32_t rc) {
 
 static void
 stu_rtmp_run_phases(stu_rtmp_request_t *r) {
+	stu_rtmp_phase_t *ph;
 	stu_list_elt_t   *elts, *e;
 	stu_queue_t      *q;
-	stu_rtmp_phase_t *ph;
 
 	elts = &stu_rtmp_phases.elts;
 
@@ -1774,8 +1836,9 @@ stu_rtmp_run_phases(stu_rtmp_request_t *r) {
 		e = stu_queue_data(q, stu_list_elt_t, queue);
 		ph = (stu_rtmp_phase_t *) e->value;
 
-		if (ph && ph->handler && ph->handler(r) == STU_OK) {
-			return;
+		if (ph && ph->handler && ph->handler(r) == STU_ERROR) {
+			stu_log_error(0, "Failed to run phase: name=%s, type=0x%02X.", ph->name.data, r->chunk_in->type_id);
+			break;
 		}
 	}
 }

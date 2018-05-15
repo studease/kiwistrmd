@@ -59,8 +59,8 @@ struct stu_rtmp_application_s {
 
 extern stu_hash_t  stu_rtmp_apps;
 
-extern stu_rtmp_application_handler_pt  stu_rtmp_on_application_start;
-extern stu_rtmp_application_handler_pt  stu_rtmp_on_application_stop;
+extern stu_rtmp_application_handler_pt  stu_rtmp_application_on_start;
+extern stu_rtmp_application_handler_pt  stu_rtmp_application_on_stop;
 
 stu_int32_t  stu_rtmp_application_init_hash();
 

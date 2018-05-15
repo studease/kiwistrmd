@@ -15,6 +15,7 @@
 
 typedef void (*stu_hash_foreach_pt)(stu_str_t *key, void *value);
 typedef void (*stu_hash_cleanup_pt)(void *value);
+
 typedef struct stu_hash_elt_s stu_hash_elt_t;
 
 struct stu_hash_elt_s {
