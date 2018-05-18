@@ -62,6 +62,13 @@
 #define STU_RTMP_VIDEO_CODEC_SCREEN_VIDEO_2                0x06
 #define STU_RTMP_VIDEO_CODEC_AVC                           0x07
 
+typedef struct {
+	stu_uint8_t   type_id;
+	stu_int32_t (*handler)(stu_rtmp_request_t *r);
+} stu_rtmp_message_listener_t;
+
+stu_int32_t  stu_rtmp_message_init();
+
 extern stu_str_t  STU_RTMP_CMD_CONNECT;
 extern stu_str_t  STU_RTMP_CMD_CLOSE;
 extern stu_str_t  STU_RTMP_CMD_CREATE_STREAM;
@@ -138,7 +145,5 @@ extern stu_str_t  STU_RTMP_CODE_NETSTREAM_STEP_NOTIFY;
 extern stu_str_t  STU_RTMP_CODE_NETSTREAM_UNPAUSE_NOTIFY;
 extern stu_str_t  STU_RTMP_CODE_NETSTREAM_UNPUBLISH_SUCCESS;
 extern stu_str_t  STU_RTMP_CODE_NETSTREAM_VIDEO_DIMENSIONCHANGE;
-
-stu_int32_t  stu_rtmp_message_init();
 
 #endif /* STUDEASE_CN_RTMP_STU_RTMP_MESSAGE_H_ */

@@ -64,7 +64,6 @@ stu_rtmp_connection_init(stu_rtmp_netconnection_t *nc, stu_connection_t *c) {
 	stu_rtmp_rand_id(nc, STU_RTMP_NETCONNECTION_ID_LEN);
 
 	stu_hash_init(&nc->commands, STU_RTMP_LISTENER_DEFAULT_SIZE, NULL, STU_HASH_FLAGS_LOWCASE);
-	stu_hash_init(&nc->netstreams, STU_RTMP_NETSTREAM_DEFAULT_SIZE, NULL, STU_HASH_FLAGS_LOWCASE);
 	stu_hash_init(&nc->responders, STU_RTMP_RESPONDER_DEFAULT_SIZE, NULL, STU_HASH_FLAGS_LOWCASE);
 }
 
@@ -787,7 +786,6 @@ stu_rtmp_on_error(stu_rtmp_request_t *r) {
 void
 stu_rtmp_close_connection(stu_rtmp_netconnection_t *nc) {
 	stu_hash_destroy(&nc->commands, NULL);
-	stu_hash_destroy(&nc->netstreams, NULL);
 	stu_hash_destroy(&nc->responders, stu_free);
 
 	stu_connection_close(nc->conn);

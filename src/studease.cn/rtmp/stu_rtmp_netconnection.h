@@ -14,7 +14,6 @@
 #define STU_RTMP_NETSTREAM_MAXIMAM       4
 
 #define STU_RTMP_LISTENER_DEFAULT_SIZE   32
-#define STU_RTMP_NETSTREAM_DEFAULT_SIZE  8
 #define STU_RTMP_RESPONDER_DEFAULT_SIZE  8
 
 typedef struct {
@@ -63,7 +62,6 @@ struct stu_rtmp_netconnection_s {
 	stu_rtmp_instance_t    *instance;
 
 	stu_hash_t              commands;
-	stu_hash_t              netstreams;
 	stu_hash_t              responders;
 
 	stu_uint32_t            stream_id;

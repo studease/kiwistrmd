@@ -12,32 +12,25 @@
 
 #define STU_RTMP_DATA_FRAMES_SIZE  8
 
-typedef stu_int32_t  (*stu_rtmp_status_handler_pt)(stu_rtmp_request_t *r);
+typedef stu_int32_t (*stu_rtmp_status_handler_pt)(stu_rtmp_request_t *r);
+typedef stu_int32_t (*stu_rtmp_data_handler_pt)(stu_rtmp_request_t *r);
 
 struct stu_rtmp_netstream_s {
 	stu_rtmp_netconnection_t   *connection;
 	stu_rtmp_stream_t          *stream;
 
 	stu_rtmp_status_handler_pt  on_status;
+	stu_rtmp_data_handler_pt    on_data;
 
 	stu_uint32_t                id;
 	stu_str_t                   name;
-
-	stu_hash_t                  data_frames;
-
-	stu_rtmp_amf_t             *metadata;
-	stu_rtmp_audio_frame_t     *audio_init;
-	stu_rtmp_video_frame_t     *video_init;
+	stu_str_t                   publish_query_string;
 
 	stu_double_t                buffer_time;
 	stu_double_t                time;
 	stu_bool_t                  pause;
-	stu_str_t                   publish_query_string;
 	stu_bool_t                  receive_audio;
 	stu_bool_t                  receive_video;
-
-	unsigned                    publishing:1;
-	unsigned                    playing:1;
 };
 
 stu_int32_t  stu_rtmp_attach(stu_rtmp_netstream_t *ns, stu_rtmp_netconnection_t *nc);

@@ -11,6 +11,7 @@ static void         stu_rtmp_process_chunk(stu_event_t *ev);
 static ssize_t      stu_rtmp_read_request_chunk(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_process_message(stu_rtmp_request_t *r);
 static void         stu_rtmp_run_phases(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_phase_foreach_handler(stu_rtmp_request_t *r, stu_rtmp_phase_t *ph);
 static void         stu_rtmp_request_empty_handler(stu_rtmp_request_t *r);
 
 static stu_int32_t  stu_rtmp_process_set_chunk_size(stu_rtmp_request_t *r);
@@ -59,15 +60,10 @@ static stu_int32_t  stu_rtmp_on_shared_object(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_on_command(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_on_aggregate(stu_rtmp_request_t *r);
 
-static stu_int32_t  stu_rtmp_on_set_data_frame(stu_rtmp_request_t *r);
-static stu_int32_t  stu_rtmp_on_clear_data_frame(stu_rtmp_request_t *r);
-static stu_int32_t  stu_rtmp_on_metadata(stu_rtmp_request_t *r);
-
-extern stu_hash_t   stu_rtmp_filter_hash;
-extern stu_list_t   stu_rtmp_phases;
+extern stu_hash_t   stu_rtmp_filters;
+extern stu_hash_t   stu_rtmp_phases;
 
 extern stu_hash_t   stu_rtmp_message_listener_hash;
-extern stu_hash_t   stu_rtmp_data_listener_hash;
 
 extern const stu_str_t  STU_RTMP_KEY_TC_URL;
 extern const stu_str_t  STU_RTMP_KEY_OBJECT_ENCODING;
@@ -92,7 +88,7 @@ stu_rtmp_message_listener_t  stu_rtmp_message_listeners[] = {
 	{ 0, NULL }
 };
 
-stu_rtmp_command_listener_t  stu_rtmp_command_listeners[] = {
+stu_rtmp_filter_listener_t  stu_rtmp_filter_listeners[] = {
 	{ stu_string("connect"),       stu_rtmp_on_connect },
 	{ stu_string("close"),         stu_rtmp_process_command_close },
 	{ stu_string("createStream"),  stu_rtmp_process_command_create_stream },
@@ -111,13 +107,6 @@ stu_rtmp_command_listener_t  stu_rtmp_command_listeners[] = {
 	{ stu_string("seek"),          stu_rtmp_process_command_seek },
 	{ stu_string("pause"),         stu_rtmp_process_command_pause },
 	{ stu_string("onStatus"),      stu_rtmp_process_command_on_status },
-	{ stu_null_string, NULL }
-};
-
-stu_rtmp_data_listener_t  stu_rtmp_data_listeners[] = {
-	{ stu_string("@setDataFrame"),   stu_rtmp_on_set_data_frame },
-	{ stu_string("@clearDataFrame"), stu_rtmp_on_clear_data_frame },
-	{ stu_string("onMetaData"),      stu_rtmp_on_metadata },
 	{ stu_null_string, NULL }
 };
 
@@ -506,24 +495,14 @@ static stu_int32_t
 stu_rtmp_process_audio(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
 	stu_buf_t        *buf;
-	u_char           *pos;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
-	pos = buf->pos;
 
 	if (buf->last - buf->pos < 2) {
 		stu_log_error(0, "Failed to parse rtmp message of audio: Data not enough.");
 		return STU_ERROR;
 	}
-
-	r->format = (*pos >> 4) & 0x0F;
-	r->sample_rate = (*pos >> 2) & 0x03;
-	r->sample_size = (*pos >> 1) & 0x01;
-	r->channels = *pos & 0x01;
-	pos++;
-
-	r->data_type = *pos++;
 
 	return STU_OK;
 }
@@ -532,22 +511,14 @@ static stu_int32_t
 stu_rtmp_process_video(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
 	stu_buf_t        *buf;
-	u_char           *pos;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
-	pos = buf->pos;
 
 	if (buf->last - buf->pos < 2) {
 		stu_log_error(0, "Failed to parse rtmp message of video: Data not enough.");
 		return STU_ERROR;
 	}
-
-	r->frame_type = (*pos >> 4) & 0x0F;
-	r->codec = *pos & 0x03;
-	pos++;
-
-	r->data_type = *pos++;
 
 	return STU_OK;
 }
@@ -557,50 +528,53 @@ stu_rtmp_process_data(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
 	stu_rtmp_amf_t   *v, *ai_hdlr, *ai_key;
 	stu_buf_t        *buf;
+	u_char           *pos;
 	stu_int32_t       rc;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	pos = buf->pos;
 	ai_hdlr = NULL;
 	ai_key = NULL;
 	rc = STU_ERROR;
 
 	// handler
-	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
+	v = stu_rtmp_amf_parse(pos, buf->last - pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp message of data: Bad AMF format[1].");
 		return STU_ERROR;
 	}
 
 	r->data_handler = (stu_str_t *) v->value;
-	buf->pos += v->cost;
-
-	ai_hdlr = v;
 
 	if (stu_strncmp(STU_RTMP_SET_DATA_FRAME.data, r->data_handler->data, r->data_handler->len) != 0 &&
 			stu_strncmp(STU_RTMP_CLEAR_DATA_FRAME.data, r->data_handler->data, r->data_handler->len) != 0) {
 		r->data_key = r->data_handler;
-		ai_key = NULL;
 		goto value;
 	}
 
+	pos += v->cost;
+	buf->pos = pos;
+
+	ai_hdlr = v;
+
 	// key
-	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
+	v = stu_rtmp_amf_parse(pos, buf->last - pos);
 	if (v == NULL) {
 		stu_log_error(0, "Failed to parse rtmp message of data: Bad AMF format[2].");
 		goto failed;
 	}
 
 	r->data_key = (stu_str_t *) v->value;
-	buf->pos += v->cost;
+	pos += v->cost;
 
 	ai_key = v;
 
 value:
 
 	// value
-	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
-	buf->pos += v ? v->cost : 0;
+	v = stu_rtmp_amf_parse(pos, buf->last - pos);
+	pos += v ? v->cost : 0;
 
 	r->data_value = v;
 
@@ -1604,14 +1578,39 @@ stu_rtmp_on_video(stu_rtmp_request_t *r) {
 
 static stu_int32_t
 stu_rtmp_on_data(stu_rtmp_request_t *r) {
-	stu_rtmp_data_listener_t *l;
-	stu_uint32_t              hk;
+	stu_rtmp_netconnection_t *nc;
+	stu_rtmp_netstream_t     *ns;
+	stu_rtmp_chunk_t         *ck;
+	stu_int32_t               rc;
 
-	hk = stu_hash_key(r->data_handler->data, r->data_handler->len, stu_rtmp_data_listener_hash.flags);
+	nc = &r->connection;
+	ck = r->chunk_in;
 
-	l = stu_hash_find_locked(&stu_rtmp_data_listener_hash, hk, r->data_handler->data, r->data_handler->len);
-	if (l && l->handler) {
-		l->handler(r);
+	ns = stu_rtmp_find_netstream(r, ck->stream_id);
+	if (ns == NULL) {
+		stu_log_error(0, "rtmp net stream not found: fd=%d, id=%d.", nc->conn->fd, ck->stream_id);
+		return STU_ERROR;
+	}
+
+	if (stu_strncmp(STU_RTMP_SET_DATA_FRAME.data, r->data_handler->data, r->data_handler->len) == 0) {
+		rc = stu_rtmp_set_data_frame(ns, r->data_key, r->data_value, FALSE);
+		if (rc == STU_ERROR) {
+			stu_log_error(0, "Failed to set rtmp data frame: fd=%d, key=%s.", nc->conn->fd, r->data_key->data);
+			return STU_ERROR;
+		}
+
+		stu_rtmp_finalize_request(r, STU_DECLINED);
+
+	} else if (stu_strncmp(STU_RTMP_CLEAR_DATA_FRAME.data, r->data_handler->data, r->data_handler->len) == 0) {
+		rc = stu_rtmp_clear_data_frame(ns, r->data_key, FALSE);
+		if (rc == STU_ERROR) {
+			stu_log_error(0, "Failed to clear rtmp data frame: fd=%d, key=%s.", nc->conn->fd, r->data_key->data);
+			return STU_ERROR;
+		}
+	}
+
+	if (ns->on_data) {
+		return ns->on_data(r);
 	}
 
 	return STU_OK;
@@ -1624,14 +1623,14 @@ stu_rtmp_on_shared_object(stu_rtmp_request_t *r) {
 
 static stu_int32_t
 stu_rtmp_on_command(stu_rtmp_request_t *r) {
-	stu_rtmp_command_listener_t *l;
-	stu_rtmp_netconnection_t    *nc;
-	stu_rtmp_filter_t           *f;
-	stu_list_elt_t              *elts;
-	stu_hash_elt_t              *e;
-	stu_queue_t                 *q;
-	stu_uint32_t                 hk;
-	stu_int32_t                  rc;
+	stu_rtmp_netconnection_t   *nc;
+	stu_rtmp_filter_t          *f;
+	stu_rtmp_filter_listener_t *l;
+	stu_list_elt_t             *elts;
+	stu_hash_elt_t             *e;
+	stu_queue_t                *q;
+	stu_uint32_t                hk;
+	stu_int32_t                 rc;
 
 	nc = &r->connection;
 	rc = STU_ERROR;
@@ -1645,9 +1644,9 @@ stu_rtmp_on_command(stu_rtmp_request_t *r) {
 	}
 
 	// TODO: use rwlock
-	stu_mutex_lock(&stu_rtmp_filter_hash.lock);
+	stu_mutex_lock(&stu_rtmp_filters.lock);
 
-	elts = &stu_rtmp_filter_hash.keys->elts;
+	elts = &stu_rtmp_filters.keys->elts;
 
 	for (q = stu_queue_tail(&elts->queue); q != stu_queue_sentinel(&elts->queue); q = stu_queue_prev(q)) {
 		e = stu_queue_data(q, stu_hash_elt_t, queue);
@@ -1670,7 +1669,7 @@ stu_rtmp_on_command(stu_rtmp_request_t *r) {
 
 done:
 
-	stu_mutex_unlock(&stu_rtmp_filter_hash.lock);
+	stu_mutex_unlock(&stu_rtmp_filters.lock);
 
 failed:
 
@@ -1740,66 +1739,6 @@ stu_rtmp_on_aggregate(stu_rtmp_request_t *r) {
 }
 
 
-static stu_int32_t
-stu_rtmp_on_set_data_frame(stu_rtmp_request_t *r) {
-	stu_rtmp_netconnection_t *nc;
-	stu_rtmp_netstream_t     *ns;
-	stu_rtmp_chunk_t         *ck;
-	stu_int32_t               rc;
-
-	nc = &r->connection;
-	ck = r->chunk_in;
-
-	ns = stu_rtmp_find_netstream(r, ck->stream_id);
-	if (ns == NULL) {
-		stu_log_error(0, "rtmp net stream not found: fd=%d, id=%d.", nc->conn->fd, ck->stream_id);
-		return STU_ERROR;
-	}
-
-	rc = stu_rtmp_set_data_frame(ns, r->data_key, r->data_value, FALSE);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to set rtmp data frame: fd=%d, key=%s.", nc->conn->fd, r->data_key->data);
-		return STU_ERROR;
-	}
-
-	stu_rtmp_finalize_request(r, STU_DECLINED);
-
-	return STU_OK;
-}
-
-static stu_int32_t
-stu_rtmp_on_clear_data_frame(stu_rtmp_request_t *r) {
-	stu_rtmp_netconnection_t *nc;
-	stu_rtmp_netstream_t     *ns;
-	stu_rtmp_chunk_t         *ck;
-	stu_int32_t               rc;
-
-	nc = &r->connection;
-	ck = r->chunk_in;
-
-	ns = stu_rtmp_find_netstream(r, ck->stream_id);
-	if (ns == NULL) {
-		stu_log_error(0, "rtmp net stream not found: fd=%d, id=%d.", nc->conn->fd, ck->stream_id);
-		return STU_ERROR;
-	}
-
-	rc = stu_rtmp_clear_data_frame(ns, r->data_key, FALSE);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to clear rtmp data frame: fd=%d, key=%s.", nc->conn->fd, r->data_key->data);
-		return STU_ERROR;
-	}
-
-	stu_rtmp_finalize_request(r, STU_DECLINED);
-
-	return STU_ERROR;
-}
-
-static stu_int32_t
-stu_rtmp_on_metadata(stu_rtmp_request_t *r) {
-	return stu_rtmp_on_set_data_frame(r);
-}
-
-
 void
 stu_rtmp_request_write_handler(stu_rtmp_request_t *r) {
 
@@ -1826,21 +1765,61 @@ stu_rtmp_finalize_request(stu_rtmp_request_t *r, stu_int32_t rc) {
 
 static void
 stu_rtmp_run_phases(stu_rtmp_request_t *r) {
-	stu_rtmp_phase_t *ph;
-	stu_list_elt_t   *elts, *e;
-	stu_queue_t      *q;
+	stu_rtmp_netconnection_t *nc;
+	stu_rtmp_phase_t         *ph;
+	stu_list_elt_t           *elts;
+	stu_hash_elt_t           *e;
+	stu_queue_t              *q;
 
-	elts = &stu_rtmp_phases.elts;
+	nc = &r->connection;
 
-	for (q = stu_queue_head(&elts->queue); q != stu_queue_sentinel(&elts->queue); q = stu_queue_next(q)) {
-		e = stu_queue_data(q, stu_list_elt_t, queue);
-		ph = (stu_rtmp_phase_t *) e->value;
+	// TODO: use rwlock
+	stu_mutex_lock(&stu_rtmp_phases.lock);
 
-		if (ph && ph->handler && ph->handler(r) == STU_ERROR) {
-			stu_log_error(0, "Failed to run phase: name=%s, type=0x%02X.", ph->name.data, r->chunk_in->type_id);
-			break;
+	elts = &stu_rtmp_phases.keys->elts;
+
+	for (q = stu_queue_tail(&elts->queue); q != stu_queue_sentinel(&elts->queue); q = stu_queue_prev(q)) {
+		e = stu_queue_data(q, stu_hash_elt_t, queue);
+		ph = e->value;
+
+		if (stu_strncasecmp(nc->url.application.data, ph->pattern.data, ph->pattern.len) != 0) {
+			continue;
+		}
+
+		if (stu_rtmp_phase_foreach_handler(r, ph) == STU_ERROR) {
+			stu_log_error(0, "Failed to run rtmp phases \"%s\": fd=%d, type=0x%02X.",
+					ph->pattern.data, nc->conn->fd, r->chunk_in->type_id);
+		}
+
+		break;
+	}
+
+	stu_mutex_unlock(&stu_rtmp_phases.lock);
+}
+
+static stu_int32_t
+stu_rtmp_phase_foreach_handler(stu_rtmp_request_t *r, stu_rtmp_phase_t *ph) {
+	stu_rtmp_netconnection_t  *nc;
+	stu_rtmp_phase_listener_t *l;
+	stu_list_elt_t            *elts;
+	stu_hash_elt_t            *e;
+	stu_queue_t               *q;
+
+	nc = &r->connection;
+	elts = &ph->listeners->keys->elts;
+
+	for (q = stu_queue_tail(&elts->queue); q != stu_queue_sentinel(&elts->queue); q = stu_queue_prev(q)) {
+		e = stu_queue_data(q, stu_hash_elt_t, queue);
+		l = e->value;
+
+		if (l && l->handler && l->handler(r) == STU_ERROR) {
+			stu_log_error(0, "Failed to run rtmp phase \"%s\": fd=%d, type=0x%02X.",
+						l->name.data, nc->conn->fd, r->chunk_in->type_id);
+			return STU_ERROR;
 		}
 	}
+
+	return STU_OK;
 }
 
 static void
@@ -1864,6 +1843,21 @@ stu_rtmp_find_netstream(stu_rtmp_request_t *r, stu_uint32_t stream_id) {
 	ns = r->streams[stream_id - 1];
 
 	return ns;
+}
+
+stu_rtmp_netstream_t *
+stu_rtmp_find_netstream_by_name(stu_rtmp_request_t *r, u_char *name, size_t len) {
+	stu_rtmp_netstream_t *ns;
+	stu_uint32_t          i;
+
+	for (i = 0; i < STU_RTMP_NETSTREAM_MAXIMAM; i++) {
+		ns = r->streams[i];
+		if (ns && stu_strncasecmp(ns->name.data, name, len) == 0) {
+			return ns;
+		}
+	}
+
+	return NULL;
 }
 
 

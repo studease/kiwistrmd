@@ -10,9 +10,23 @@
 
 #include "stu_rtmp.h"
 
-#define STU_RTMP_SUBSCRIBER_DEFAULT_SIZE  1024
+typedef struct {
+	stu_queue_t             queue;
+
+	stu_uint8_t             type;          // 1 byte
+	stu_uint32_t            timestamp;     // 4 bytes
+	stu_uint32_t            stream_id;     // 3 bytes
+
+	unsigned                frame_type:4;  // 0xF0
+	unsigned                codec:4;       // 0x0F
+	stu_uint8_t             data_type;
+
+	stu_buf_t               payload;
+} stu_rtmp_video_frame_t;
 
 typedef struct {
+	stu_queue_t             queue;
+
 	stu_uint8_t             type;          // 1 byte
 	stu_uint32_t            timestamp;     // 4 bytes
 	stu_uint32_t            stream_id;     // 3 bytes
@@ -27,39 +41,25 @@ typedef struct {
 } stu_rtmp_audio_frame_t;
 
 typedef struct {
-	stu_uint8_t             type;          // 1 byte
-	stu_uint32_t            timestamp;     // 4 bytes
-	stu_uint32_t            stream_id;     // 3 bytes
+	stu_str_t         name;
+	stu_file_t        file;
 
-	unsigned                frame_type:4;  // 0xF0
-	unsigned                codec:4;       // 0x0F
-	stu_uint8_t             data_type;
+	stu_hash_t        data_frames;
 
-	stu_buf_t               payload;
-} stu_rtmp_video_frame_t;
+	stu_rtmp_chunk_t *video_init;
+	stu_rtmp_chunk_t *audio_init;
+	stu_queue_t       frames; // chunk
 
-typedef struct {
-	stu_rtmp_netstream_t   *source;
+	stu_double_t      time;
+	stu_double_t      duration;
+	stu_double_t      max_queue_delay;
+	stu_int32_t       max_queue_size;
+	stu_int32_t       subscribers;
 
-	stu_str_t               name;
-
-	stu_hash_t              subscribers;
-	stu_hash_t              data_frames;
-
-	stu_rtmp_amf_t         *metadata;
-	stu_rtmp_audio_frame_t *audio_init;
-	stu_rtmp_video_frame_t *video_init;
-
-	stu_double_t            time;
-	stu_double_t            duration;
-	stu_double_t            max_queue_delay;
-	stu_int32_t             max_queue_size;
-
-	unsigned                publishing:1;
-	unsigned                playing:1;
-	unsigned                vod:1;
-	unsigned                record:1;
-	unsigned                destroyed:1;
+	unsigned          publishing:1;
+	unsigned          playing:1;
+	unsigned          record:1;
+	unsigned          destroyed:1;
 } stu_rtmp_stream_t;
 
 stu_rtmp_stream_t *stu_rtmp_stream_get(u_char *name, size_t len);

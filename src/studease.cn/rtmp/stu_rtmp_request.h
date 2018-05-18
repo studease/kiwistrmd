@@ -42,13 +42,6 @@ struct stu_rtmp_request_s {
 	stu_uint32_t                ack_window_size;
 	stu_uint32_t                bandwidth;
 	stu_uint8_t                 limit_type;
-	unsigned                    format:4;      // 1111 0000
-	unsigned                    sample_rate:2; // 0000 1100
-	unsigned                    sample_size:1; // 0000 0010
-	unsigned                    channels:1;    // 0000 0001
-	unsigned                    frame_type:4;  // 0xF0
-	unsigned                    codec:4;       // 0x0F
-	stu_uint8_t                 data_type;
 	stu_str_t                  *data_handler;
 	stu_str_t                  *data_key;
 	stu_rtmp_amf_t             *data_value;
@@ -69,6 +62,10 @@ struct stu_rtmp_request_s {
 
 	// used for parsing rtmp request.
 	stu_uint8_t                 state;
+	stu_uint32_t                pre_timestamp;
+	stu_uint32_t                pre_payload_size;
+	stu_uint8_t                 pre_type_id;
+	stu_uint32_t                pre_stream_id;
 };
 
 void         stu_rtmp_request_read_handler(stu_event_t *ev);
@@ -81,6 +78,8 @@ void         stu_rtmp_finalize_request(stu_rtmp_request_t *r, stu_int32_t rc);
 
 stu_rtmp_netstream_t *
              stu_rtmp_find_netstream(stu_rtmp_request_t *r, stu_uint32_t stream_id);
+stu_rtmp_netstream_t *
+             stu_rtmp_find_netstream_by_name(stu_rtmp_request_t *r, u_char *name, size_t len);
 
 void         stu_rtmp_free_request(stu_rtmp_request_t *r);
 void         stu_rtmp_close_request(stu_rtmp_request_t *r);

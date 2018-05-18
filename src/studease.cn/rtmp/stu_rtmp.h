@@ -35,6 +35,8 @@ typedef struct stu_rtmp_upstream_s       stu_rtmp_upstream_t;
 #include "stu_rtmp_netstream.h"
 #include "stu_rtmp_filter.h"
 #include "stu_rtmp_phase.h"
+#include "stu_rtmp_phase_flv.h"
+#include "stu_rtmp_phase_fmp4.h"
 #include "stu_rtmp_request.h"
 #include "stu_rtmp_parse.h"
 #include "stu_rtmp_upstream.h"

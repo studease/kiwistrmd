@@ -10,33 +10,16 @@
 
 stu_int32_t
 stu_rtmp_attach(stu_rtmp_netstream_t *ns, stu_rtmp_netconnection_t *nc) {
-	u_char       tmp[10];
-	stu_str_t    key;
-	stu_int32_t  rc;
-
-	stu_memzero(tmp, 10);
-
-	key.data = tmp;
-	key.len = stu_sprintf(tmp, "%u", ns->id) - tmp;
-
 	ns->connection = nc;
 	ns->receive_audio = TRUE;
 	ns->receive_video = TRUE;
 
-	rc = stu_hash_init(&ns->data_frames, STU_RTMP_DATA_FRAMES_SIZE, NULL, STU_HASH_FLAGS_LOWCASE);
-	if (rc == STU_ERROR) {
-		return STU_ERROR;
-	}
-
-	rc = stu_hash_insert_locked(&nc->netstreams, &key, ns);
-
-	return rc;
+	return STU_OK;
 }
 
 stu_int32_t
 stu_rtmp_sink(stu_rtmp_netstream_t *ns, stu_rtmp_stream_t *s) {
 	ns->stream = s;
-	s->source = ns;
 	return STU_OK;
 }
 
@@ -44,7 +27,6 @@ stu_int32_t
 stu_rtmp_source(stu_rtmp_netstream_t *ns, stu_rtmp_stream_t *s) {
 	stu_rtmp_netconnection_t *nc;
 	stu_rtmp_instance_t      *inst;
-	stu_int32_t               rc;
 
 	nc = ns->connection;
 	inst = nc->instance;
@@ -52,12 +34,11 @@ stu_rtmp_source(stu_rtmp_netstream_t *ns, stu_rtmp_stream_t *s) {
 	stu_mutex_lock(&inst->lock);
 
 	ns->stream = s;
-
-	rc = stu_hash_insert_locked(&s->subscribers, &nc->id, ns);
+	s->subscribers++;
 
 	stu_mutex_unlock(&inst->lock);
 
-	return rc;
+	return STU_OK;
 }
 
 
@@ -128,19 +109,24 @@ stu_rtmp_play2(stu_rtmp_netstream_t *ns) {
 
 stu_int32_t
 stu_rtmp_release_stream(stu_rtmp_netconnection_t *nc, u_char *name, size_t len) {
+	stu_rtmp_request_t   *r;
 	stu_rtmp_netstream_t *ns;
 	stu_rtmp_amf_t       *ao_cmd, *ao_tran, *ao_prop, *ao_name;
 	u_char               *pos;
 	u_char                tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
-	stu_uint32_t          hk, stream_id;
+	stu_uint32_t          stream_id;
 	stu_int32_t           rc;
 
+	r = nc->conn->request;
+	stream_id = 0;
 	pos = tmp;
 	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
 
-	hk = stu_hash_key(name, len, nc->netstreams.flags);
-	ns = stu_hash_remove_locked(&nc->netstreams, hk, name, len);
-	stream_id = ns ? ns->id : 0;
+	ns = stu_rtmp_find_netstream_by_name(r, name, len);
+	if (ns) {
+		r->streams[ns->id - 1] = NULL;
+		stream_id = ns->id;
+	}
 
 	ao_cmd = stu_rtmp_amf_create_string(NULL, STU_RTMP_CMD_RELEASE_STREAM.data, STU_RTMP_CMD_RELEASE_STREAM.len);
 	ao_tran = stu_rtmp_amf_create_number(NULL, nc->transaction_id++);
@@ -169,21 +155,21 @@ stu_rtmp_release_stream(stu_rtmp_netconnection_t *nc, u_char *name, size_t len) 
 
 stu_int32_t
 stu_rtmp_delete_stream(stu_rtmp_netconnection_t *nc, stu_uint32_t stream_id) {
-	stu_rtmp_amf_t *ao_cmd, *ao_tran, *ao_prop, *ao_id;
-	u_char         *pos;
-	u_char          tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
-	stu_str_t       key;
-	stu_uint32_t    hk;
-	stu_int32_t     rc;
+	stu_rtmp_request_t   *r;
+	stu_rtmp_netstream_t *ns;
+	stu_rtmp_amf_t       *ao_cmd, *ao_tran, *ao_prop, *ao_id;
+	u_char               *pos;
+	u_char                tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
+	stu_int32_t           rc;
 
+	r = nc->conn->request;
 	pos = tmp;
 	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
 
-	key.data = tmp;
-	key.len = stu_sprintf(tmp, "%u", stream_id) - tmp;
-
-	hk = stu_hash_key(key.data, key.len, nc->netstreams.flags);
-	stu_hash_remove_locked(&nc->netstreams, hk, key.data, key.len);
+	ns = stu_rtmp_find_netstream(r, stream_id);
+	if (ns) {
+		r->streams[ns->id - 1] = NULL;
+	}
 
 	ao_cmd = stu_rtmp_amf_create_string(NULL, STU_RTMP_CMD_DELETE_STREAM.data, STU_RTMP_CMD_DELETE_STREAM.len);
 	ao_tran = stu_rtmp_amf_create_number(NULL, nc->transaction_id++);
@@ -416,24 +402,22 @@ stu_rtmp_send_status(stu_rtmp_netstream_t *ns, stu_str_t *level, stu_str_t *code
 stu_int32_t
 stu_rtmp_set_data_frame(stu_rtmp_netstream_t *ns, stu_str_t *key, stu_rtmp_amf_t *value, stu_bool_t remote) {
 	stu_rtmp_netconnection_t *nc;
+	stu_rtmp_stream_t        *stream;
 	stu_rtmp_amf_t           *ao_hlr, *ao_key;
 	u_char                   *pos;
 	u_char                    tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
 	stu_int32_t               rc;
 
 	nc = ns->connection;
+	stream = ns->stream;
 	pos = tmp;
 	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
 	rc = STU_OK;
 
-	if (stu_hash_insert_locked(&ns->data_frames, key, value) == STU_ERROR) {
+	if (stu_hash_insert(&stream->data_frames, key, value) == STU_ERROR) {
 		stu_log_error(0, "Failed to %s: fd=%d, key=%s, value=%p.",
 				STU_RTMP_SET_DATA_FRAME.data, nc->conn->fd, key->data, value);
 		return STU_ERROR;
-	}
-
-	if (stu_strncmp(STU_RTMP_ON_META_DATA.data, key->data, key->len) == 0) {
-		ns->metadata = value;
 	}
 
 	if (remote == FALSE) {
@@ -468,28 +452,24 @@ done:
 stu_int32_t
 stu_rtmp_clear_data_frame(stu_rtmp_netstream_t *ns, stu_str_t *key, stu_bool_t remote) {
 	stu_rtmp_netconnection_t *nc;
-	stu_rtmp_amf_t           *ao_hlr, *ao_key;
+	stu_rtmp_stream_t        *stream;
+	stu_rtmp_amf_t           *v, *ao_hlr, *ao_key;
 	u_char                   *pos;
 	u_char                    tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
 	stu_uint32_t              hk;
 	stu_int32_t               rc;
 
 	nc = ns->connection;
+	stream = ns->stream;
 	pos = tmp;
 	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
+	rc = STU_OK;
 
-	hk = stu_hash_key(key->data, key->len, ns->data_frames.flags);
-	stu_hash_remove_locked(&ns->data_frames, hk, key->data, key->len);
-
-	if (stu_strncmp(STU_RTMP_ON_META_DATA.data, key->data, key->len) == 0) {
-		if (ns->metadata) {
-			stu_rtmp_amf_delete(ns->metadata);
-			ns->metadata = NULL;
-		}
-	}
+	hk = stu_hash_key(key->data, key->len, stream->data_frames.flags);
+	v = stu_hash_remove(&stream->data_frames, hk, key->data, key->len);
+	stu_rtmp_amf_delete(v);
 
 	if (remote == FALSE) {
-		rc = STU_OK;
 		goto done;
 	}
 
@@ -514,7 +494,7 @@ done:
 		stu_log_debug(4, "%s: fd=%d, key=%s.", STU_RTMP_CLEAR_DATA_FRAME.data, nc->conn->fd, key->data);
 	}
 
-	return STU_OK;
+	return rc;
 }
 
 stu_int32_t
@@ -552,9 +532,13 @@ stu_int32_t
 stu_rtmp_on_play(stu_rtmp_request_t *r) {
 	stu_rtmp_netconnection_t *nc;
 	stu_rtmp_netstream_t     *ns;
+	stu_rtmp_instance_t      *inst;
+	stu_rtmp_stream_t        *s;
+	stu_uint32_t              hk;
 	stu_int32_t               rc;
 
 	nc = &r->connection;
+	inst = nc->instance;
 	rc = STU_ERROR;
 
 	stu_log_debug(4, "Handle command \"%s\": fd=%d, /%s/%s.",
@@ -565,13 +549,32 @@ stu_rtmp_on_play(stu_rtmp_request_t *r) {
 		return STU_ERROR;
 	}
 
-	if (nc->read_access.len == 0 || stu_strncasecmp(nc->read_access.data, (u_char *) "/", 1) == 0) {
-		stu_rtmp_send_user_control(nc, STU_RTMP_EVENT_TYPE_STREAM_BEGIN, 0, 0, 0);
+	ns->name.data = stu_pcalloc(nc->conn->pool, r->stream_name->len + 1);
+	if (ns->name.data == NULL) {
+		return STU_ERROR;
+	}
 
-		rc = stu_rtmp_send_status(ns, &STU_RTMP_LEVEL_STATUS, &STU_RTMP_CODE_NETSTREAM_PLAY_START, "started playing");
-		if (rc == STU_ERROR) {
-			stu_log_error(0, "Failed to handle command \"%s\": fd=%d, level=%s, code=%s.",
-					STU_RTMP_CMD_PLAY.data, nc->conn->fd, STU_RTMP_LEVEL_STATUS.data, STU_RTMP_CODE_NETSTREAM_PLAY_START.data);
+	stu_strncpy(ns->name.data, r->stream_name->data, r->stream_name->len);
+	ns->name.len = r->stream_name->len;
+
+	if (nc->read_access.len == 0 || stu_strncasecmp(nc->read_access.data, (u_char *) "/", 1) == 0) {
+		hk = stu_hash_key(ns->name.data, ns->name.len, inst->streams.flags);
+
+		s = stu_hash_find(&inst->streams, hk, ns->name.data, ns->name.len);
+		if (s) {
+			stu_rtmp_send_user_control(nc, STU_RTMP_EVENT_TYPE_STREAM_BEGIN, 0, 0, 0);
+
+			rc = stu_rtmp_send_status(ns, &STU_RTMP_LEVEL_STATUS, &STU_RTMP_CODE_NETSTREAM_PLAY_START, "started playing");
+			if (rc == STU_ERROR) {
+				stu_log_error(0, "Failed to handle command \"%s\": fd=%d, level=%s, code=%s.",
+						STU_RTMP_CMD_PLAY.data, nc->conn->fd, STU_RTMP_LEVEL_STATUS.data, STU_RTMP_CODE_NETSTREAM_PLAY_START.data);
+			}
+		} else {
+			rc = stu_rtmp_send_status(ns, &STU_RTMP_LEVEL_ERROR, &STU_RTMP_CODE_NETSTREAM_PLAY_STREAMNOTFOUND, "stream not found");
+			if (rc == STU_ERROR) {
+				stu_log_error(0, "Failed to handle command \"%s\": fd=%d, level=%s, code=%s.",
+						STU_RTMP_CMD_PLAY.data, nc->conn->fd, STU_RTMP_LEVEL_ERROR.data, STU_RTMP_CODE_NETSTREAM_PLAY_STREAMNOTFOUND.data);
+			}
 		}
 	} else {
 		rc = stu_rtmp_send_status(ns, &STU_RTMP_LEVEL_ERROR, &STU_RTMP_CODE_NETSTREAM_PLAY_FAILED, "access denied");
@@ -594,16 +597,13 @@ stu_int32_t
 stu_rtmp_on_release_stream(stu_rtmp_request_t *r) {
 	stu_rtmp_netconnection_t *nc;
 	stu_rtmp_netstream_t     *ns;
-	stu_uint32_t              hk;
 
 	nc = &r->connection;
 
 	stu_log_debug(4, "Handle command \"%s\": fd=%d, /%s/%s.",
 			STU_RTMP_CMD_RELEASE_STREAM.data, nc->conn->fd, nc->url.application.data, r->stream_name->data);
 
-	hk = stu_hash_key(r->stream_name->data, r->stream_name->len, nc->netstreams.flags);
-
-	ns = stu_hash_remove_locked(&nc->netstreams, hk, r->stream_name->data, r->stream_name->len);
+	ns = stu_rtmp_find_netstream_by_name(r, r->stream_name->data, r->stream_name->len);
 	if (ns) {
 		r->streams[ns->id - 1] = NULL;
 		stu_rtmp_close_netstream(ns);
@@ -616,7 +616,6 @@ stu_int32_t
 stu_rtmp_on_delete_stream(stu_rtmp_request_t *r) {
 	stu_rtmp_netconnection_t *nc;
 	stu_rtmp_netstream_t     *ns;
-	stu_uint32_t              hk;
 
 	nc = &r->connection;
 
@@ -624,13 +623,6 @@ stu_rtmp_on_delete_stream(stu_rtmp_request_t *r) {
 			STU_RTMP_CMD_DELETE_STREAM.data, nc->conn->fd, nc->url.application.data, r->stream_id);
 
 	ns = stu_rtmp_find_netstream(r, r->stream_id);
-	if (ns == NULL) {
-		return STU_ERROR;
-	}
-
-	hk = stu_hash_key(ns->name.data, ns->name.len, nc->netstreams.flags);
-
-	ns = stu_hash_remove_locked(&nc->netstreams, hk, ns->name.data, ns->name.len);
 	if (ns) {
 		r->streams[ns->id - 1] = NULL;
 		stu_rtmp_close_netstream(ns);
@@ -730,13 +722,11 @@ stu_rtmp_on_publish(stu_rtmp_request_t *r) {
 	stu_rtmp_netstream_t     *ns;
 	stu_rtmp_instance_t      *inst;
 	stu_rtmp_stream_t        *s;
-	stu_str_t                *name;
 	stu_uint32_t              hk;
 	stu_int32_t               rc;
 
 	nc = &r->connection;
 	inst = nc->instance;
-	name = r->stream_name;
 	rc = STU_ERROR;
 
 	stu_log_debug(4, "Handle command \"%s\": fd=%d, /%s/%s.",
@@ -747,21 +737,29 @@ stu_rtmp_on_publish(stu_rtmp_request_t *r) {
 		return STU_ERROR;
 	}
 
+	ns->name.data = stu_pcalloc(nc->conn->pool, r->stream_name->len + 1);
+	if (ns->name.data == NULL) {
+		return STU_ERROR;
+	}
+
+	stu_strncpy(ns->name.data, r->stream_name->data, r->stream_name->len);
+	ns->name.len = r->stream_name->len;
+
 	stu_mutex_lock(&inst->lock);
 
-	hk = stu_hash_key(name->data, name->len, inst->streams.flags);
+	hk = stu_hash_key(ns->name.data, ns->name.len, inst->streams.flags);
 
-	s = stu_hash_find_locked(&inst->streams, hk, name->data, name->len);
+	s = stu_hash_find_locked(&inst->streams, hk, ns->name.data, ns->name.len);
 	if (s == NULL) {
-		s = stu_rtmp_stream_get(name->data, name->len);
+		s = stu_rtmp_stream_get(ns->name.data, ns->name.len);
 		if (s == NULL) {
-			stu_log_error(0, "Failed to get rtmp stream: name=%s.", name->data);
+			stu_log_error(0, "Failed to get rtmp stream: name=%s.", ns->name.data);
 			goto failed;
 		}
 
-		rc = stu_hash_insert_locked(&inst->streams, name, s);
+		rc = stu_hash_insert_locked(&inst->streams, &ns->name, s);
 		if (rc == STU_ERROR) {
-			stu_log_error(0, "Failed to insert rtmp stream: /%s/%s.", nc->url.application.data, name->data);
+			stu_log_error(0, "Failed to insert rtmp stream: /%s/%s.", nc->url.application.data, ns->name.data);
 			goto failed;
 		}
 	}
@@ -775,6 +773,8 @@ stu_rtmp_on_publish(stu_rtmp_request_t *r) {
 
 		rc = STU_ERROR;
 	} else {
+		stu_rtmp_sink(ns, s);
+
 		rc = stu_rtmp_send_status(ns, &STU_RTMP_LEVEL_STATUS, &STU_RTMP_CODE_NETSTREAM_PUBLISH_START, "publish start");
 		if (rc == STU_ERROR) {
 			stu_log_error(0, "Failed to handle command \"%s\": fd=%d, level=%s, code=%s.",
@@ -820,25 +820,16 @@ stu_rtmp_on_status(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t         *ck;
 	stu_rtmp_netconnection_t *nc;
 	stu_rtmp_netstream_t     *ns;
-	u_char                    tmp[10];
-	stu_str_t                 key;
-	stu_uint32_t              hk;
 	stu_int32_t               rc;
 
 	nc = &r->connection;
 	ck = r->chunk_in;
-	stu_memzero(tmp, 10);
 	rc = STU_OK; // Just ignore.
 
 	stu_log_debug(4, "Handle command \"%s\": fd=%d, /%s/%d.",
 			STU_RTMP_CMD_ON_STATUS.data, nc->conn->fd, nc->url.application.data, ck->stream_id);
 
-	key.data = tmp;
-	key.len = stu_sprintf(tmp, "%u", ck->stream_id) - tmp;
-
-	hk = stu_hash_key(key.data, key.len, nc->netstreams.flags);
-
-	ns = stu_hash_find_locked(&nc->netstreams, hk, key.data, key.len);
+	ns = stu_rtmp_find_netstream(r, ck->stream_id);
 	if (ns && ns->on_status) {
 		rc = ns->on_status(r);
 	}
@@ -849,7 +840,7 @@ stu_rtmp_on_status(stu_rtmp_request_t *r) {
 
 void
 stu_rtmp_close_netstream(stu_rtmp_netstream_t *ns) {
-	stu_hash_destroy_locked(&ns->data_frames, (stu_hash_cleanup_pt) stu_rtmp_amf_delete);
+
 }
 
 void

@@ -14,25 +14,15 @@
 
 typedef stu_int32_t (*stu_rtmp_filter_handler_pt)(stu_rtmp_request_t *r);
 
-typedef struct {
-	stu_uint8_t   type_id;
-	stu_int32_t (*handler)(stu_rtmp_request_t *r);
-} stu_rtmp_message_listener_t;
-
-typedef struct {
-	stu_str_t     name;
-	stu_int32_t (*handler)(stu_rtmp_request_t *r);
-} stu_rtmp_command_listener_t;
-
-typedef struct {
-	stu_str_t     name;
-	stu_int32_t (*handler)(stu_rtmp_request_t *r);
-} stu_rtmp_data_listener_t;
-
 struct stu_rtmp_filter_s {
 	stu_str_t     pattern;
 	stu_hash_t   *listeners;
 };
+
+typedef struct {
+	stu_str_t     command;
+	stu_int32_t (*handler)(stu_rtmp_request_t *r);
+} stu_rtmp_filter_listener_t;
 
 stu_int32_t  stu_rtmp_filter_init_hash();
 

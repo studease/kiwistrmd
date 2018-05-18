@@ -85,19 +85,19 @@ stu_str_t  STU_RTMP_CODE_NETSTREAM_UNPUBLISH_SUCCESS         = stu_string("NetSt
 stu_str_t  STU_RTMP_CODE_NETSTREAM_VIDEO_DIMENSIONCHANGE     = stu_string("NetStream.Video.DimensionChange");
 
 extern stu_rtmp_message_listener_t  stu_rtmp_message_listeners[];
-extern stu_rtmp_command_listener_t  stu_rtmp_command_listeners[];
-extern stu_rtmp_data_listener_t     stu_rtmp_data_listeners[];
+extern stu_rtmp_filter_listener_t   stu_rtmp_filter_listeners[];
+extern stu_rtmp_phase_listener_t    stu_rtmp_phase_listeners[];
 
 stu_hash_t  stu_rtmp_message_listener_hash;
-stu_hash_t  stu_rtmp_command_listener_hash;
-stu_hash_t  stu_rtmp_data_listener_hash;
+stu_hash_t  stu_rtmp_filter_listener_hash;
+stu_hash_t  stu_rtmp_phase_listener_hash;
 
 
 stu_int32_t
 stu_rtmp_message_init() {
 	stu_rtmp_message_listener_t *ml;
-	stu_rtmp_command_listener_t *cl;
-	stu_rtmp_data_listener_t    *dl;
+	stu_rtmp_filter_listener_t  *fl;
+	stu_rtmp_phase_listener_t   *pl;
 	u_char                       tmp[3];
 	stu_str_t                    key;
 
@@ -117,24 +117,24 @@ stu_rtmp_message_init() {
 		}
 	}
 
-	// command listener
-	if (stu_hash_init(&stu_rtmp_command_listener_hash, STU_RTMP_LISTENER_DEFAULT_SIZE, NULL, STU_HASH_FLAGS_LOWCASE) == STU_ERROR) {
+	// filter listener
+	if (stu_hash_init(&stu_rtmp_filter_listener_hash, STU_RTMP_LISTENER_DEFAULT_SIZE, NULL, STU_HASH_FLAGS_LOWCASE) == STU_ERROR) {
 		return STU_ERROR;
 	}
 
-	for (cl = stu_rtmp_command_listeners; cl->name.len; cl++) {
-		if (stu_hash_insert_locked(&stu_rtmp_command_listener_hash, &cl->name, cl) == STU_ERROR) {
+	for (fl = stu_rtmp_filter_listeners; fl->command.len; fl++) {
+		if (stu_hash_insert_locked(&stu_rtmp_filter_listener_hash, &fl->command, fl) == STU_ERROR) {
 			return STU_ERROR;
 		}
 	}
 
-	// data listener
-	if (stu_hash_init(&stu_rtmp_data_listener_hash, STU_RTMP_LISTENER_DEFAULT_SIZE, NULL, STU_HASH_FLAGS_LOWCASE) == STU_ERROR) {
+	// phase listener
+	if (stu_hash_init(&stu_rtmp_phase_listener_hash, STU_RTMP_LISTENER_DEFAULT_SIZE, NULL, STU_HASH_FLAGS_LOWCASE) == STU_ERROR) {
 		return STU_ERROR;
 	}
 
-	for (dl = stu_rtmp_data_listeners; dl->name.len; dl++) {
-		if (stu_hash_insert_locked(&stu_rtmp_data_listener_hash, &dl->name, dl) == STU_ERROR) {
+	for (pl = stu_rtmp_phase_listeners; pl->name.len; pl++) {
+		if (stu_hash_insert_locked(&stu_rtmp_phase_listener_hash, &pl->name, pl) == STU_ERROR) {
 			return STU_ERROR;
 		}
 	}

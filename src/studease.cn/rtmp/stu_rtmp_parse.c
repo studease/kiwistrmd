@@ -146,9 +146,9 @@ hs_done:
 stu_int32_t
 stu_rtmp_parse_chunk(stu_rtmp_request_t *r, stu_buf_t *src) {
 	stu_rtmp_netconnection_t *nc;
-	stu_rtmp_chunk_t      *ck;
-	u_char                 ch;
-	stu_uint32_t           n;
+	stu_rtmp_chunk_t         *ck;
+	u_char                    ch;
+	stu_uint32_t              n;
 	enum {
 		sw_fmt = 0,
 		sw_csid_0,
@@ -240,6 +240,8 @@ stu_rtmp_parse_chunk(stu_rtmp_request_t *r, stu_buf_t *src) {
 			} else {
 				ck->state = sw_msg_len_0;
 			}
+
+			r->pre_timestamp = ck->timestamp;
 			break;
 
 		case sw_msg_len_0:
@@ -255,6 +257,8 @@ stu_rtmp_parse_chunk(stu_rtmp_request_t *r, stu_buf_t *src) {
 		case sw_msg_len_2:
 			ck->payload.size |= ch;
 			ck->state = sw_msg_type;
+
+			r->pre_payload_size = ck->payload.size;
 			break;
 
 		case sw_msg_type:
@@ -265,6 +269,8 @@ stu_rtmp_parse_chunk(stu_rtmp_request_t *r, stu_buf_t *src) {
 			} else {
 				ck->state = sw_stream_id_0;
 			}
+
+			r->pre_type_id = ck->type_id;
 			break;
 
 		case sw_stream_id_0:
@@ -284,6 +290,7 @@ stu_rtmp_parse_chunk(stu_rtmp_request_t *r, stu_buf_t *src) {
 
 		case sw_stream_id_3:
 			ck->stream_id |= ch << 24;
+			r->pre_stream_id = ck->stream_id;
 			ck->state = ck->extended ? sw_ext_timestamp_0 : sw_data;
 			break;
 
@@ -305,6 +312,8 @@ stu_rtmp_parse_chunk(stu_rtmp_request_t *r, stu_buf_t *src) {
 		case sw_ext_timestamp_3:
 			ck->timestamp |= ch;
 			ck->state = sw_data;
+
+			r->pre_timestamp = ck->timestamp;
 			break;
 
 		case sw_data:
@@ -359,6 +368,11 @@ stu_rtmp_get_uncomplete_chunk(stu_rtmp_request_t *r) {
 
 	ck = stu_calloc(sizeof(stu_rtmp_chunk_t));
 	if (ck) {
+		ck->timestamp = r->pre_timestamp;
+		ck->payload.size = r->pre_payload_size;
+		ck->type_id = r->pre_type_id;
+		ck->stream_id = r->pre_stream_id;
+
 		stu_queue_insert_tail(&r->chunks, &ck->queue);
 	}
 

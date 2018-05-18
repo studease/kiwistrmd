@@ -7,38 +7,61 @@
 
 #include "stu_rtmp.h"
 
-stu_list_t  stu_rtmp_phases;
+stu_hash_t  stu_rtmp_phases;
+
+stu_rtmp_phase_listener_t  stu_rtmp_phase_listeners[] = {
+	{ stu_string("flv"), stu_rtmp_phase_flv_handler, stu_rtmp_phase_flv_close },
+	{ stu_null_string, NULL, NULL }
+};
+
+extern stu_hash_t  stu_rtmp_phase_listener_hash;
+
+static stu_rtmp_phase_t  rtmp_phases[] = {
+	{ stu_string(""), &stu_rtmp_phase_listener_hash },
+	{ stu_null_string, NULL }
+};
 
 
 stu_int32_t
 stu_rtmp_phase_init() {
-	stu_list_init(&stu_rtmp_phases, NULL);
+	stu_rtmp_phase_t *ph;
+
+	if (stu_hash_init(&stu_rtmp_phases, STU_RTMP_PHASE_MAX_RECORDS, NULL, STU_HASH_FLAGS_LOWCASE) == STU_ERROR) {
+		return STU_ERROR;
+	}
+
+	for (ph = rtmp_phases; ph->listeners; ph++) {
+		if (stu_rtmp_phase_add(&ph->pattern, ph->listeners) == STU_ERROR) {
+			return STU_ERROR;
+		}
+	}
+
 	return STU_OK;
 }
 
 
 stu_int32_t
-stu_rtmp_phase_add(stu_str_t *name, stu_rtmp_phase_handler_pt handler) {
+stu_rtmp_phase_add(stu_str_t *pattern, stu_hash_t *listeners) {
 	stu_rtmp_phase_t *ph;
 
 	ph = stu_calloc(sizeof(stu_rtmp_phase_t));
 	if (ph == NULL) {
-		stu_log_error(0, "Failed to calloc rtmp phase: name=%s.", name->data);
+		stu_log_error(0, "Failed to calloc rtmp phase: pattern=%s.", pattern->data);
 		return STU_ERROR;
 	}
 
-	ph->name.data = stu_calloc(name->len + 1);
-	if (ph->name.data == NULL) {
+	ph->pattern.data = stu_calloc(pattern->len + 1);
+	if (ph->pattern.data == NULL) {
 		return STU_ERROR;
 	}
 
-	stu_strncpy(ph->name.data, name->data, name->len);
-	ph->name.len = name->len;
+	stu_strncpy(ph->pattern.data, pattern->data, pattern->len);
+	ph->pattern.len = pattern->len;
 
-	ph->handler = handler;
+	ph->listeners = listeners;
 
-	if (stu_list_insert_tail(&stu_rtmp_phases, ph) == NULL) {
-		stu_log_error(0, "Failed to insert rtmp phase: name=%s.", name->data);
+	if (stu_hash_insert(&stu_rtmp_phases, pattern, ph) == STU_ERROR) {
+		stu_log_error(0, "Failed to insert rtmp phase: pattern=%s.", pattern->data);
 		return STU_ERROR;
 	}
 
@@ -46,25 +69,16 @@ stu_rtmp_phase_add(stu_str_t *name, stu_rtmp_phase_handler_pt handler) {
 }
 
 stu_int32_t
-stu_rtmp_phase_del(stu_str_t *name) {
+stu_rtmp_phase_del(stu_str_t *pattern) {
 	stu_rtmp_phase_t *ph;
-	stu_list_elt_t   *elts, *e;
-	stu_queue_t      *q;
+	stu_uint32_t      hk;
 
-	elts = &stu_rtmp_phases.elts;
+	hk = stu_hash_key(pattern->data, pattern->len, stu_rtmp_phases.flags);
 
-	for (q = stu_queue_head(&elts->queue); q != stu_queue_sentinel(&elts->queue); q = stu_queue_next(q)) {
-		e = stu_queue_data(q, stu_list_elt_t, queue);
-		ph = e->value;
-
-		if (stu_strncasecmp(ph->name.data, name->data, name->len) == 0) {
-			stu_queue_remove(&e->queue);
-			stu_rtmp_phases.length--;
-
-			stu_free(ph->name.data);
-			stu_free(ph);
-			break;
-		}
+	ph = stu_hash_remove(&stu_rtmp_phases, hk, pattern->data, pattern->len);
+	if (ph) {
+		stu_free(ph->pattern.data);
+		stu_free(ph);
 	}
 
 	return STU_OK;

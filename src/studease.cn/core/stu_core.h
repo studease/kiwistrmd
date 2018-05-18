@@ -182,5 +182,7 @@ typedef ssize_t (*stu_send_pt)(stu_connection_t *c, u_char *buf, size_t size);
 #include "win32/stu_process.h"
 #endif
 #include "../utils/stu_utils.h"
+#include "../codec/stu_codec.h"
+#include "../format/stu_format.h"
 
 #endif /* STUDEASE_CN_CORE_STU_CORE_H_ */
