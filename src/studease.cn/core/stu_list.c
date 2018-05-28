@@ -1,7 +1,7 @@
 /*
  * stu_list.c
  *
- *  Created on: 2017年11月15日
+ *  Created on: 2017骞�11鏈�15鏃�
  *      Author: Tony Lau
  */
 
@@ -108,9 +108,16 @@ stu_list_insert_tail(stu_list_t *list, void *value) {
 
 void *
 stu_list_remove(stu_list_t *list, stu_list_elt_t *elt) {
+	void *v;
+
+	v = elt->value;
+
 	stu_queue_remove(&elt->queue);
 	list->length--;
-	return elt->value;
+
+	list->hooks.free_fn(elt);
+
+	return v;
 }
 
 void

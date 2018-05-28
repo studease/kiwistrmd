@@ -7,6 +7,8 @@
 
 #include "stu_rtmp.h"
 
+static stu_rtmp_frame_t *stu_rtmp_frame_create(stu_uint8_t type, stu_uint32_t timestamp, u_char *data, size_t len);
+
 
 stu_rtmp_stream_t *
 stu_rtmp_stream_get(u_char *name, size_t len) {
@@ -29,6 +31,8 @@ stu_rtmp_stream_get(u_char *name, size_t len) {
 		s->name.len = len;
 	}
 
+	stu_list_init(&s->frames, NULL);
+
 	if (stu_hash_init(&s->data_frames, STU_RTMP_DATA_FRAMES_SIZE, NULL, STU_HASH_FLAGS_LOWCASE) == STU_ERROR) {
 		stu_log_error(0, "Failed to init rtmp data frame hash: %s.", s->name.data);
 		goto failed;
@@ -49,6 +53,61 @@ failed:
 	return NULL;
 }
 
+stu_rtmp_frame_t *
+stu_rtmp_stream_append(stu_rtmp_stream_t *s, stu_uint8_t type, stu_uint32_t timestamp, u_char *data, size_t len) {
+	stu_rtmp_frame_t *f;
+
+	f = stu_rtmp_frame_create(type, timestamp, data, len);
+	if (f == NULL) {
+		stu_log_error(0, "Failed to create rtmp frame: type=0x%02X, ts=%u, size=%u.", type, timestamp, len);
+		return NULL;
+	}
+
+	if (s->frames.length == 0) {
+		s->time = f->timestamp;
+	}
+
+	s->duration = f->timestamp;
+
+	stu_list_insert_tail(&s->frames, f);
+
+	return f;
+}
+
+void
+stu_rtmp_stream_drop(stu_rtmp_stream_t *s, stu_uint32_t timestamp) {
+	stu_rtmp_frame_t *f;
+	stu_list_t       *list;
+	stu_list_elt_t   *elts, *e;
+	stu_queue_t      *q;
+
+	list = &s->frames;
+	elts = &list->elts;
+
+	for (q = stu_queue_tail(&elts->queue); q != stu_queue_sentinel(&elts->queue); q = stu_queue_prev(q)) {
+		e = stu_queue_data(q, stu_list_elt_t, queue);
+		f = e->value;
+
+		if (f->type != STU_RTMP_MESSAGE_TYPE_VIDEO || f->info.video.frame_type != 0x1 || f->timestamp >= timestamp) {
+			continue;
+		}
+
+		s->time = f->timestamp;
+
+		for (q = stu_queue_prev(q); q != stu_queue_sentinel(&elts->queue); q = stu_queue_prev(q)) {
+			e = stu_queue_data(q, stu_list_elt_t, queue);
+			f = e->value;
+
+			stu_list_remove(list, e);
+
+			stu_free(f->payload.start);
+			stu_free(f);
+		}
+
+		break;
+	}
+}
+
 /*
  * Lock instance at first. And unlink publisher to this.
  */
@@ -61,4 +120,52 @@ stu_rtmp_stream_free(stu_rtmp_stream_t *s) {
 	}
 
 	stu_free(s);
+}
+
+
+static stu_rtmp_frame_t *
+stu_rtmp_frame_create(stu_uint8_t type, stu_uint32_t timestamp, u_char *data, size_t len) {
+	stu_rtmp_frame_t *f;
+	u_char           *pos;
+
+	pos = data;
+
+	if (len < 2) {
+		return NULL;
+	}
+
+	f = stu_calloc(sizeof(stu_rtmp_frame_t));
+	if (f == NULL) {
+		stu_log_error(0, "Failed to calloc rtmp frame: fd=%d, ts=%u.");
+		return NULL;
+	}
+
+	f->type = type;
+	f->timestamp = timestamp;
+
+	if (type == STU_RTMP_MESSAGE_TYPE_VIDEO) {
+		f->info.video.frame_type = (*pos >> 4) & 0x0F;
+		f->info.video.codec = *pos & 0x0F;
+		f->info.video.data_type = *pos++;
+	} else {
+		f->info.audio.format = (*pos >> 4) & 0x0F;
+		f->info.audio.sample_rate = (*pos >> 2) & 0x03;
+		f->info.audio.sample_size = (*pos >> 1) & 0x01;
+		f->info.audio.channels = *pos & 0x01;
+		f->info.audio.data_type = *pos++;
+	}
+
+	f->payload.start = stu_calloc(len);
+	if (f->payload.start == NULL) {
+		stu_log_error(0, "Failed to calloc rtmp frame payload: fd=%d, ts=%u.");
+		stu_free(f);
+		return NULL;
+	}
+
+	f->payload.pos = f->payload.start;
+	f->payload.last = stu_memcpy(f->payload.start, data, len);
+	f->payload.end = f->payload.start + len;
+	f->payload.size = len;
+
+	return f;
 }

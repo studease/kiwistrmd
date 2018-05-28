@@ -7,6 +7,8 @@
 
 #include "stu_rtmp.h"
 
+static stu_int32_t  stu_rtmp_send_frame(stu_rtmp_netstream_t *ns);
+
 
 stu_int32_t
 stu_rtmp_attach(stu_rtmp_netstream_t *ns, stu_rtmp_netconnection_t *nc) {
@@ -279,14 +281,52 @@ stu_rtmp_receive_video(stu_rtmp_netstream_t *ns, stu_bool_t flag) {
 stu_int32_t
 stu_rtmp_publish(stu_rtmp_netstream_t *ns, u_char *name, size_t len, stu_str_t *type) {
 	stu_rtmp_netconnection_t *nc;
+	stu_rtmp_instance_t      *inst;
+	stu_rtmp_stream_t        *s;
 	stu_rtmp_amf_t           *ao_cmd, *ao_tran, *ao_prop, *ao_name, *ao_type;
 	u_char                   *pos;
 	u_char                    tmp[STU_RTMP_REQUEST_DEFAULT_SIZE];
+	stu_uint32_t              hk;
 	stu_int32_t               rc;
 
 	nc = ns->connection;
+	inst = nc->instance;
 	pos = tmp;
 	stu_memzero(tmp, STU_RTMP_REQUEST_DEFAULT_SIZE);
+	rc = STU_ERROR;
+
+	ns->name.data = stu_pcalloc(nc->conn->pool, len + 1);
+	if (ns->name.data == NULL) {
+		return STU_ERROR;
+	}
+
+	stu_strncpy(ns->name.data, name, len);
+	ns->name.len = len;
+
+	stu_mutex_lock(&inst->lock);
+
+	hk = stu_hash_key(ns->name.data, ns->name.len, inst->streams.flags);
+
+	s = stu_hash_find_locked(&inst->streams, hk, ns->name.data, ns->name.len);
+	if (s == NULL) {
+		s = stu_rtmp_stream_get(ns->name.data, ns->name.len);
+		if (s == NULL) {
+			stu_log_error(0, "Failed to get rtmp stream: name=%s.", ns->name.data);
+			stu_mutex_unlock(&inst->lock);
+			return STU_ERROR;
+		}
+
+		rc = stu_hash_insert_locked(&inst->streams, &ns->name, s);
+		if (rc == STU_ERROR) {
+			stu_log_error(0, "Failed to insert rtmp stream: /%s/%s.", nc->url.application.data, ns->name.data);
+			stu_mutex_unlock(&inst->lock);
+			return STU_ERROR;
+		}
+	}
+
+	ns->stream = s;
+
+	stu_mutex_unlock(&inst->lock);
 
 	ao_cmd = stu_rtmp_amf_create_string(NULL, STU_RTMP_CMD_PUBLISH.data, STU_RTMP_CMD_PUBLISH.len);
 	ao_tran = stu_rtmp_amf_create_number(NULL, nc->transaction_id++);
@@ -500,31 +540,69 @@ done:
 stu_int32_t
 stu_rtmp_send_video_frame(stu_rtmp_netstream_t *ns, stu_uint32_t timestamp, u_char *data, size_t len) {
 	stu_rtmp_netconnection_t *nc;
-	stu_int32_t               rc;
+	stu_rtmp_frame_t         *f;
 
 	nc = ns->connection;
 
-	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND_2, timestamp, STU_RTMP_MESSAGE_TYPE_VIDEO, ns->id, data, len);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to send video frame: fd=%d, ts=%u.", nc->conn->fd, timestamp);
+	f = stu_rtmp_stream_append(ns->stream, STU_RTMP_MESSAGE_TYPE_VIDEO, timestamp, data, len);
+	if (f == NULL) {
+		stu_log_error(0, "Failed to append rtmp frame: fd=%d, ts=%u.", nc->conn->fd, timestamp);
+		return STU_ERROR;
 	}
 
-	return rc;
+	stu_rtmp_stream_drop(ns->stream, timestamp);
+
+	return stu_rtmp_send_frame(ns);
 }
 
 stu_int32_t
 stu_rtmp_send_audio_frame(stu_rtmp_netstream_t *ns, stu_uint32_t timestamp, u_char *data, size_t len) {
 	stu_rtmp_netconnection_t *nc;
-	stu_int32_t               rc;
+	stu_rtmp_frame_t         *f;
 
 	nc = ns->connection;
 
-	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND_2, timestamp, STU_RTMP_MESSAGE_TYPE_AUDIO, ns->id, data, len);
-	if (rc == STU_ERROR) {
-		stu_log_error(0, "Failed to send audio frame: fd=%d, ts=%u.", nc->conn->fd, timestamp);
+	f = stu_rtmp_stream_append(ns->stream, STU_RTMP_MESSAGE_TYPE_AUDIO, timestamp, data, len);
+	if (f == NULL) {
+		stu_log_error(0, "Failed to append rtmp frame: fd=%d, ts=%u.", nc->conn->fd, timestamp);
+		return STU_ERROR;
 	}
 
-	return rc;
+	return stu_rtmp_send_frame(ns);
+}
+
+static stu_int32_t
+stu_rtmp_send_frame(stu_rtmp_netstream_t *ns) {
+	stu_rtmp_netconnection_t *nc;
+	stu_rtmp_frame_t         *f;
+	stu_list_t               *list;
+	stu_list_elt_t           *elts, *e;
+	stu_queue_t              *q;
+	stu_int32_t               rc;
+
+	nc = ns->connection;
+	list = &ns->stream->frames;
+	elts = &list->elts;
+
+	for (q = stu_queue_head(&elts->queue); q != stu_queue_sentinel(&elts->queue); /* void */) {
+		e = stu_queue_data(q, stu_list_elt_t, queue);
+		f = e->value;
+
+		rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_COMMAND_2, f->timestamp, f->type, ns->id, f->payload.start, f->payload.size);
+		if (rc == STU_ERROR) {
+			stu_log_debug(4, "Failed to send rtmp frame: fd=%d, type=0x%02X, ts=%u, size=%u.",
+					nc->conn->fd, f->type, f->timestamp, f->payload.size);
+			break;
+		}
+
+		q = stu_queue_next(q);
+		stu_list_remove(list, e);
+
+		stu_free(f->payload.start);
+		stu_free(f);
+	}
+
+	return STU_OK;
 }
 
 

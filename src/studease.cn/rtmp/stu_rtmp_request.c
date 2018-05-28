@@ -1566,13 +1566,55 @@ stu_rtmp_on_edge(stu_rtmp_request_t *r) {
 
 static stu_int32_t
 stu_rtmp_on_audio(stu_rtmp_request_t *r) {
+	stu_rtmp_netconnection_t *nc;
+	stu_rtmp_netstream_t     *ns;
+	stu_rtmp_chunk_t         *ck;
+	stu_rtmp_frame_t         *f;
+
+	nc = &r->connection;
+	ck = r->chunk_in;
+
+	ns = stu_rtmp_find_netstream(r, ck->stream_id);
+	if (ns == NULL) {
+		stu_log_error(0, "rtmp net stream not found: fd=%d, id=%d.", nc->conn->fd, ck->stream_id);
+		return STU_ERROR;
+	}
+
+	f = stu_rtmp_stream_append(ns->stream, ck->type_id, ck->timestamp, ck->payload.start, ck->payload.size);
+	if (f == NULL) {
+		stu_log_error(0, "Failed to append rtmp frame: fd=%d, ts=%u.", nc->conn->fd, ck->timestamp);
+		return STU_ERROR;
+	}
+
 	stu_rtmp_finalize_request(r, STU_DECLINED);
+
 	return STU_OK;
 }
 
 static stu_int32_t
 stu_rtmp_on_video(stu_rtmp_request_t *r) {
+	stu_rtmp_netconnection_t *nc;
+	stu_rtmp_netstream_t     *ns;
+	stu_rtmp_chunk_t         *ck;
+	stu_rtmp_frame_t         *f;
+
+	nc = &r->connection;
+	ck = r->chunk_in;
+
+	ns = stu_rtmp_find_netstream(r, ck->stream_id);
+	if (ns == NULL) {
+		stu_log_error(0, "rtmp net stream not found: fd=%d, id=%d.", nc->conn->fd, ck->stream_id);
+		return STU_ERROR;
+	}
+
+	f = stu_rtmp_stream_append(ns->stream, ck->type_id, ck->timestamp, ck->payload.start, ck->payload.size);
+	if (f == NULL) {
+		stu_log_error(0, "Failed to append rtmp frame: fd=%d, ts=%u.", nc->conn->fd, ck->timestamp);
+		return STU_ERROR;
+	}
+
 	stu_rtmp_finalize_request(r, STU_DECLINED);
+
 	return STU_OK;
 }
 

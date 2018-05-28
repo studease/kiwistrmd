@@ -102,6 +102,7 @@ struct stu_rtmp_netconnection_s {
 
 	// used for parsing rtmp chunk.
 	stu_uint8_t             state;
+	stu_uint32_t            pre_csid;
 	stu_uint32_t            pre_stream_id;
 };
 
@@ -113,7 +114,7 @@ stu_int32_t     stu_rtmp_close(stu_rtmp_netconnection_t *nc);
 stu_int32_t     stu_rtmp_create_stream(stu_rtmp_netconnection_t *nc, stu_rtmp_responder_t *res);
 
 stu_int32_t     stu_rtmp_set_chunk_size(stu_rtmp_netconnection_t *nc, stu_int32_t size);
-stu_int32_t     stu_rtmp_send_abort(stu_rtmp_netconnection_t *nc);
+stu_int32_t     stu_rtmp_send_abort(stu_rtmp_netconnection_t *nc, stu_uint32_t csid);
 stu_int32_t     stu_rtmp_send_ack_sequence(stu_rtmp_netconnection_t *nc);
 stu_int32_t     stu_rtmp_send_user_control(stu_rtmp_netconnection_t *nc, stu_uint16_t event, stu_uint32_t stream_id, stu_uint32_t buf_len, stu_uint32_t timestamp);
 stu_int32_t     stu_rtmp_set_ack_window_size(stu_rtmp_netconnection_t *nc, stu_uint32_t size);

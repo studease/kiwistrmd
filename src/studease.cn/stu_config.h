@@ -8,13 +8,13 @@
 #ifndef STUDEASE_CN_STU_CONFIG_H_
 #define STUDEASE_CN_STU_CONFIG_H_
 
-#define STU_LINUX                1
-#define STU_WIN32                0
+#define STU_LINUX                0
+#define STU_WIN32                1
 
 #if (STU_WIN32)
 #define STU_HAVE_GETTIMEZONE     1
 #else
-#define STU_HAVE_GMTOFF          0
+#define STU_HAVE_GMTOFF          1
 #endif
 
 #define STU_HAVE_EPOLL           STU_LINUX

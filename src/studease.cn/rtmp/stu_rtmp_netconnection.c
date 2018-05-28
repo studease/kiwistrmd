@@ -308,9 +308,34 @@ failed:
 }
 
 stu_int32_t
-stu_rtmp_send_abort(stu_rtmp_netconnection_t *nc) {
-	// TODO: Send abort message.
-	return STU_OK;
+stu_rtmp_send_abort(stu_rtmp_netconnection_t *nc, stu_uint32_t csid) {
+	stu_connection_t *c;
+	u_char           *pos;
+	u_char            tmp[4];
+	stu_int32_t       rc;
+
+	c = nc->conn;
+	pos = tmp;
+	stu_memzero(tmp, 4);
+
+	*(uint32_t *) pos = stu_endian_32(nc->stat.bytes_in);
+	pos += 4;
+
+	rc = stu_rtmp_send_buffer(nc, STU_RTMP_CSID_PROTOCOL_CONTROL, 0, STU_RTMP_MESSAGE_TYPE_ABORT, 0, tmp, pos - tmp);
+	if (rc == STU_ERROR) {
+		stu_log_error(0, "Failed to send protocol control 0x%02X: fd=%d, csid=%d.",
+				STU_RTMP_MESSAGE_TYPE_ABORT, c->fd, csid);
+		stu_rtmp_close_connection(nc);
+		goto failed;
+	}
+
+	nc->pre_csid = 0;
+
+	stu_log_debug(4, "sent abort: csid=%d.", csid);
+
+failed:
+
+	return rc;
 }
 
 stu_int32_t
@@ -524,6 +549,12 @@ stu_rtmp_send_buffer(stu_rtmp_netconnection_t *nc, stu_uint32_t csid, stu_uint32
 	size_t            i, size;
 
 	c = nc->conn;
+
+	if (nc->pre_csid && stu_rtmp_send_abort(nc, nc->pre_csid) == STU_ERROR) {
+		stu_log_error(0, "Failed to abort previous chunk stream: id=%d.", nc->pre_csid);
+		return STU_ERROR;
+	}
+
 	fmt = nc->pre_stream_id == stream_id ? 1 : 0;
 	nc->pre_stream_id = stream_id;
 
@@ -586,6 +617,11 @@ stu_rtmp_send_buffer(stu_rtmp_netconnection_t *nc, stu_uint32_t csid, stu_uint32
 		n = c->send(c, tmp, pos - tmp);
 		if (n == -1) {
 			stu_log_error(stu_errno, "Failed to write rtmp chunk.");
+
+			if (i) {
+				nc->pre_csid = csid;
+			}
+
 			return STU_ERROR;
 		}
 
@@ -687,6 +723,7 @@ stu_rtmp_on_create_stream(stu_rtmp_request_t *r) {
 		ns = stu_pcalloc(nc->conn->pool, sizeof(stu_rtmp_netstream_t));
 		if (ns) {
 			ns->id = nc->stream_id++;
+			ns->buffer_time = 0.1;
 			ns->on_status = NULL;
 			r->streams[ns->id - 1] = ns;
 
