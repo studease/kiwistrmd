@@ -41,6 +41,7 @@ static stu_int32_t  stu_rtmp_process_command_close_stream(stu_rtmp_request_t *r)
 static stu_int32_t  stu_rtmp_process_command_receive_audio(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_process_command_receive_video(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_process_command_fcpublish(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_process_command_fcunpublish(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_process_command_publish(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_process_command_seek(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_process_command_pause(stu_rtmp_request_t *r);
@@ -103,6 +104,7 @@ stu_rtmp_filter_listener_t  stu_rtmp_filter_listeners[] = {
 	{ stu_string("receiveAudio"),  stu_rtmp_process_command_receive_audio },
 	{ stu_string("receiveVideo"),  stu_rtmp_process_command_receive_video },
 	{ stu_string("FCPublish"),     stu_rtmp_process_command_fcpublish },
+	{ stu_string("FCUnpublish"),   stu_rtmp_process_command_fcunpublish },
 	{ stu_string("publish"),       stu_rtmp_process_command_publish },
 	{ stu_string("seek"),          stu_rtmp_process_command_seek },
 	{ stu_string("pause"),         stu_rtmp_process_command_pause },
@@ -1211,6 +1213,56 @@ stu_rtmp_process_command_fcpublish(stu_rtmp_request_t *r) {
 
 	// handler
 	rc = stu_rtmp_on_fcpublish(r);
+	if (rc == STU_ERROR) {
+		stu_log_error(0, "Failed to handle rtmp command: %s.", r->command->data);
+	}
+
+failed:
+
+	stu_rtmp_amf_delete(r->command_obj);
+	stu_rtmp_amf_delete(ai_name);
+
+	r->command_obj = NULL;
+
+	return rc;
+}
+
+static stu_int32_t
+stu_rtmp_process_command_fcunpublish(stu_rtmp_request_t *r) {
+	stu_rtmp_chunk_t *ck;
+	stu_rtmp_amf_t   *v, *ai_name;
+	stu_buf_t        *buf;
+	stu_int32_t       rc;
+
+	ck = r->chunk_in;
+	buf = &ck->payload;
+	ai_name = NULL;
+	rc = STU_ERROR;
+
+	// command object
+	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp command: %s.", r->command->data);
+		goto failed;
+	}
+
+	r->command_obj = v; // null
+	buf->pos += v->cost;
+
+	// publishing name
+	v = stu_rtmp_amf_parse(buf->pos, buf->last - buf->pos);
+	if (v == NULL) {
+		stu_log_error(0, "Failed to parse rtmp command: %s.", r->command->data);
+		goto failed;
+	}
+
+	r->stream_name = (stu_str_t *) v->value;
+	buf->pos += v->cost;
+
+	ai_name = v;
+
+	// handler
+	rc = stu_rtmp_on_fcunpublish(r);
 	if (rc == STU_ERROR) {
 		stu_log_error(0, "Failed to handle rtmp command: %s.", r->command->data);
 	}

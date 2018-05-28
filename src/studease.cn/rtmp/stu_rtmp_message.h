@@ -89,6 +89,7 @@ extern stu_str_t  STU_RTMP_CMD_ON_STATUS;
 // outdated
 extern stu_str_t  STU_RTMP_CMD_RELEASE_STREAM;
 extern stu_str_t  STU_RTMP_CMD_FC_PUBLISH;
+extern stu_str_t  STU_RTMP_CMD_FC_UNPUBLISH;
 extern stu_str_t  STU_RTMP_CMD_ON_FC_PUBLISH;
 
 extern stu_str_t  STU_RTMP_SET_DATA_FRAME;

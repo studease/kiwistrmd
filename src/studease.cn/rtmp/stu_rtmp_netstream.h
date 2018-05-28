@@ -62,6 +62,7 @@ stu_int32_t  stu_rtmp_on_close_stream(stu_rtmp_request_t *r);
 stu_int32_t  stu_rtmp_on_receive_audio(stu_rtmp_request_t *r);
 stu_int32_t  stu_rtmp_on_receive_video(stu_rtmp_request_t *r);
 stu_int32_t  stu_rtmp_on_fcpublish(stu_rtmp_request_t *r);
+stu_int32_t  stu_rtmp_on_fcunpublish(stu_rtmp_request_t *r);
 stu_int32_t  stu_rtmp_on_publish(stu_rtmp_request_t *r);
 stu_int32_t  stu_rtmp_on_seek(stu_rtmp_request_t *r);
 stu_int32_t  stu_rtmp_on_pause(stu_rtmp_request_t *r);

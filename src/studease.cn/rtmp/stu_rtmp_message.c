@@ -27,6 +27,7 @@ stu_str_t  STU_RTMP_CMD_ON_STATUS      = stu_string("onStatus");
 // outdated
 stu_str_t  STU_RTMP_CMD_RELEASE_STREAM = stu_string("releaseStream");
 stu_str_t  STU_RTMP_CMD_FC_PUBLISH     = stu_string("FCPublish");
+stu_str_t  STU_RTMP_CMD_FC_UNPUBLISH   = stu_string("FCUnpublish");
 stu_str_t  STU_RTMP_CMD_ON_FC_PUBLISH  = stu_string("onFCPublish");
 
 stu_str_t  STU_RTMP_SET_DATA_FRAME     = stu_string("@setDataFrame");

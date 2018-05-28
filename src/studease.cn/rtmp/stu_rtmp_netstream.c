@@ -8,6 +8,10 @@
 #include "stu_rtmp.h"
 
 static stu_int32_t  stu_rtmp_send_frame(stu_rtmp_netstream_t *ns);
+static void         stu_rtmp_run_phases(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_phase_foreach_handler(stu_rtmp_request_t *r, stu_rtmp_phase_t *ph);
+
+extern stu_hash_t   stu_rtmp_phases;
 
 
 stu_int32_t
@@ -792,6 +796,79 @@ stu_rtmp_on_fcpublish(stu_rtmp_request_t *r) {
 	stu_rtmp_amf_delete(ao_info);
 
 	return rc;
+}
+
+stu_int32_t
+stu_rtmp_on_fcunpublish(stu_rtmp_request_t *r) {
+	stu_rtmp_netconnection_t *nc;
+
+	nc = &r->connection;
+
+	stu_log_debug(4, "Handle command \"%s\": fd=%d, /%s/%s.",
+			STU_RTMP_CMD_FC_UNPUBLISH.data, nc->conn->fd, nc->url.application.data, r->stream_name->data);
+
+	stu_rtmp_run_phases(r);
+
+	return STU_OK;
+}
+
+static void
+stu_rtmp_run_phases(stu_rtmp_request_t *r) {
+	stu_rtmp_netconnection_t *nc;
+	stu_rtmp_phase_t         *ph;
+	stu_list_elt_t           *elts;
+	stu_hash_elt_t           *e;
+	stu_queue_t              *q;
+
+	nc = &r->connection;
+
+	// TODO: use rwlock
+	stu_mutex_lock(&stu_rtmp_phases.lock);
+
+	elts = &stu_rtmp_phases.keys->elts;
+
+	for (q = stu_queue_tail(&elts->queue); q != stu_queue_sentinel(&elts->queue); q = stu_queue_prev(q)) {
+		e = stu_queue_data(q, stu_hash_elt_t, queue);
+		ph = e->value;
+
+		if (stu_strncasecmp(nc->url.application.data, ph->pattern.data, ph->pattern.len) != 0) {
+			continue;
+		}
+
+		if (stu_rtmp_phase_foreach_handler(r, ph) == STU_ERROR) {
+			stu_log_error(0, "Failed to run rtmp phases \"%s\": fd=%d, type=0x%02X.",
+					ph->pattern.data, nc->conn->fd, r->chunk_in->type_id);
+		}
+
+		break;
+	}
+
+	stu_mutex_unlock(&stu_rtmp_phases.lock);
+}
+
+static stu_int32_t
+stu_rtmp_phase_foreach_handler(stu_rtmp_request_t *r, stu_rtmp_phase_t *ph) {
+	stu_rtmp_netconnection_t  *nc;
+	stu_rtmp_phase_listener_t *l;
+	stu_list_elt_t            *elts;
+	stu_hash_elt_t            *e;
+	stu_queue_t               *q;
+
+	nc = &r->connection;
+	elts = &ph->listeners->keys->elts;
+
+	for (q = stu_queue_tail(&elts->queue); q != stu_queue_sentinel(&elts->queue); q = stu_queue_prev(q)) {
+		e = stu_queue_data(q, stu_hash_elt_t, queue);
+		l = e->value;
+
+		if (l && l->close && l->close(r) == STU_ERROR) {
+			stu_log_error(0, "Failed to run rtmp phase \"%s\": fd=%d, type=0x%02X.",
+						l->name.data, nc->conn->fd, r->chunk_in->type_id);
+			return STU_ERROR;
+		}
+	}
+
+	return STU_OK;
 }
 
 stu_int32_t

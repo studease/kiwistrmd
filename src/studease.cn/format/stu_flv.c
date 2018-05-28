@@ -8,7 +8,7 @@
 #include "stu_format.h"
 
 static u_char  stu_flv_header[] = "FLV\x1\x5\0\0\0\x9\0\0\0\0";
-static u_char  stu_flv_footer[] = "x9\0\0\x5\0\0\0\0\0\0\0\x23\x2\0\0\0\0\0\0\x16";
+static u_char  stu_flv_footer[] = "\x9\0\0\x5\0\0\0\0\0\0\0\x17\x2\0\0\0\0\0\0\x10";
 
 
 stu_int32_t
@@ -98,8 +98,8 @@ stu_flv_write_tag(stu_flv_t *flv, stu_uint8_t type, stu_uint32_t ts, void *buf, 
 
 stu_int32_t
 stu_flv_close(stu_flv_t *flv, stu_uint32_t ts) {
-	stu_file_t   *file;
-	u_char       *pos;
+	stu_file_t *file;
+	u_char     *pos;
 
 	file = &flv->file;
 	pos = stu_flv_footer + 4;
