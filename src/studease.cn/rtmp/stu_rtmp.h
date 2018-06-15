@@ -10,7 +10,7 @@
 
 #include "../stu_config.h"
 #include "../core/stu_core.h"
-#include "../codec/stu_codec.h"
+#include "../av/stu_av.h"
 
 #define STU_RTMP_VERSION_3  0x03
 

@@ -542,13 +542,13 @@ done:
 }
 
 stu_int32_t
-stu_rtmp_send_video_frame(stu_rtmp_netstream_t *ns, stu_uint32_t timestamp, u_char *data, size_t len) {
+stu_rtmp_send_video_frame(stu_rtmp_netstream_t *ns, stu_uint32_t timestamp, stu_rtmp_frame_info_t *info, u_char *data, size_t len) {
 	stu_rtmp_netconnection_t *nc;
 	stu_rtmp_frame_t         *f;
 
 	nc = ns->connection;
 
-	f = stu_rtmp_stream_append(ns->stream, STU_RTMP_MESSAGE_TYPE_VIDEO, timestamp, data, len);
+	f = stu_rtmp_stream_append(ns->stream, STU_RTMP_MESSAGE_TYPE_VIDEO, timestamp, info, data, len);
 	if (f == NULL) {
 		stu_log_error(0, "Failed to append rtmp frame: fd=%d, ts=%u.", nc->conn->fd, timestamp);
 		return STU_ERROR;
@@ -560,13 +560,13 @@ stu_rtmp_send_video_frame(stu_rtmp_netstream_t *ns, stu_uint32_t timestamp, u_ch
 }
 
 stu_int32_t
-stu_rtmp_send_audio_frame(stu_rtmp_netstream_t *ns, stu_uint32_t timestamp, u_char *data, size_t len) {
+stu_rtmp_send_audio_frame(stu_rtmp_netstream_t *ns, stu_uint32_t timestamp, stu_rtmp_frame_info_t *info, u_char *data, size_t len) {
 	stu_rtmp_netconnection_t *nc;
 	stu_rtmp_frame_t         *f;
 
 	nc = ns->connection;
 
-	f = stu_rtmp_stream_append(ns->stream, STU_RTMP_MESSAGE_TYPE_AUDIO, timestamp, data, len);
+	f = stu_rtmp_stream_append(ns->stream, STU_RTMP_MESSAGE_TYPE_AUDIO, timestamp, info, data, len);
 	if (f == NULL) {
 		stu_log_error(0, "Failed to append rtmp frame: fd=%d, ts=%u.", nc->conn->fd, timestamp);
 		return STU_ERROR;

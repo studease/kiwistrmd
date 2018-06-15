@@ -7,7 +7,7 @@
 
 #include "stu_rtmp.h"
 
-static stu_rtmp_frame_t *stu_rtmp_frame_create(stu_uint8_t type, stu_uint32_t timestamp, u_char *data, size_t len);
+static stu_rtmp_frame_t *stu_rtmp_frame_create(stu_uint8_t type, stu_uint32_t timestamp, stu_rtmp_frame_info_t *info, u_char *data, size_t len);
 
 
 stu_rtmp_stream_t *
@@ -54,10 +54,10 @@ failed:
 }
 
 stu_rtmp_frame_t *
-stu_rtmp_stream_append(stu_rtmp_stream_t *s, stu_uint8_t type, stu_uint32_t timestamp, u_char *data, size_t len) {
+stu_rtmp_stream_append(stu_rtmp_stream_t *s, stu_uint8_t type, stu_uint32_t timestamp, stu_rtmp_frame_info_t *info, u_char *data, size_t len) {
 	stu_rtmp_frame_t *f;
 
-	f = stu_rtmp_frame_create(type, timestamp, data, len);
+	f = stu_rtmp_frame_create(type, timestamp, info, data, len);
 	if (f == NULL) {
 		stu_log_error(0, "Failed to create rtmp frame: type=0x%02X, ts=%u, size=%u.", type, timestamp, len);
 		return NULL;
@@ -88,7 +88,7 @@ stu_rtmp_stream_drop(stu_rtmp_stream_t *s, stu_uint32_t timestamp) {
 		e = stu_queue_data(q, stu_list_elt_t, queue);
 		f = e->value;
 
-		if (f->type != STU_RTMP_MESSAGE_TYPE_VIDEO || f->info.video.frame_type != 0x1 || f->timestamp >= timestamp) {
+		if (f->type != STU_RTMP_MESSAGE_TYPE_VIDEO || f->info.frame_type != 0x1 || f->timestamp >= timestamp) {
 			continue;
 		}
 
@@ -124,13 +124,10 @@ stu_rtmp_stream_free(stu_rtmp_stream_t *s) {
 
 
 static stu_rtmp_frame_t *
-stu_rtmp_frame_create(stu_uint8_t type, stu_uint32_t timestamp, u_char *data, size_t len) {
+stu_rtmp_frame_create(stu_uint8_t type, stu_uint32_t timestamp, stu_rtmp_frame_info_t *info, u_char *data, size_t len) {
 	stu_rtmp_frame_t *f;
-	u_char           *pos;
 
-	pos = data;
-
-	if (len < 2) {
+	if (len == 0) {
 		return NULL;
 	}
 
@@ -142,18 +139,7 @@ stu_rtmp_frame_create(stu_uint8_t type, stu_uint32_t timestamp, u_char *data, si
 
 	f->type = type;
 	f->timestamp = timestamp;
-
-	if (type == STU_RTMP_MESSAGE_TYPE_VIDEO) {
-		f->info.video.frame_type = (*pos >> 4) & 0x0F;
-		f->info.video.codec = *pos & 0x0F;
-		f->info.video.data_type = *pos++;
-	} else {
-		f->info.audio.format = (*pos >> 4) & 0x0F;
-		f->info.audio.sample_rate = (*pos >> 2) & 0x03;
-		f->info.audio.sample_size = (*pos >> 1) & 0x01;
-		f->info.audio.channels = *pos & 0x01;
-		f->info.audio.data_type = *pos++;
-	}
+	f->info = *info;
 
 	f->payload.start = stu_calloc(len);
 	if (f->payload.start == NULL) {
@@ -163,9 +149,10 @@ stu_rtmp_frame_create(stu_uint8_t type, stu_uint32_t timestamp, u_char *data, si
 	}
 
 	f->payload.pos = f->payload.start;
-	f->payload.last = stu_memcpy(f->payload.start, data, len);
 	f->payload.end = f->payload.start + len;
 	f->payload.size = len;
+
+	f->payload.last = stu_memcpy(f->payload.start, data, len);
 
 	return f;
 }

@@ -11,7 +11,6 @@ INCLUDE_DIRECTORIES(src/studease.cn/event)
 INCLUDE_DIRECTORIES(src/studease.cn/utils)
 INCLUDE_DIRECTORIES(src/studease.cn/http)
 INCLUDE_DIRECTORIES(src/studease.cn/websocket)
-INCLUDE_DIRECTORIES(src/studease.cn/rtmp)
 INCLUDE_DIRECTORIES(src/kiwistrmd.com)
 INCLUDE_DIRECTORIES(src/kiwistrmd.com/core)
 
@@ -27,7 +26,6 @@ ADD_EXECUTABLE(kiwistrmd ${DIR_SRC})
 
 #add link library
 TARGET_LINK_LIBRARIES(kiwistrmd ksd)
-TARGET_LINK_LIBRARIES(kiwistrmd rtmp)
 TARGET_LINK_LIBRARIES(kiwistrmd websocket)
 TARGET_LINK_LIBRARIES(kiwistrmd http)
 TARGET_LINK_LIBRARIES(kiwistrmd utils)

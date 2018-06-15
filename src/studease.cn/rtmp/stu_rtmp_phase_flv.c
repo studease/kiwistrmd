@@ -42,11 +42,7 @@ stu_rtmp_phase_flv_handler(stu_rtmp_request_t *r) {
 		return STU_ERROR;
 	}
 
-	if (flv->file.offset == 0 && stu_flv_write_header(flv) == STU_ERROR) {
-		return STU_ERROR;
-	}
-
-	rc = stu_flv_write_tag(flv, ck->type_id, ck->timestamp, buf->pos, buf->last - buf->pos);
+	rc = stu_flv_flush(flv, ck->type_id, ck->timestamp, buf->pos, buf->last - buf->pos);
 	if (rc == STU_ERROR) {
 		stu_log_error(0, "Failed to write flv tag: fd=%d.", nc->conn->fd);
 	}
@@ -57,12 +53,10 @@ stu_rtmp_phase_flv_handler(stu_rtmp_request_t *r) {
 stu_int32_t
 stu_rtmp_phase_flv_close(stu_rtmp_request_t *r) {
 	stu_rtmp_netconnection_t *nc;
-	stu_rtmp_chunk_t         *ck;
 	stu_flv_t                *flv;
 	stu_int32_t               rc;
 
 	nc = &r->connection;
-	ck = r->chunk_in;
 
 	flv = stu_rtmp_phase_get_flv(r);
 	if (flv == NULL) {
@@ -70,7 +64,7 @@ stu_rtmp_phase_flv_close(stu_rtmp_request_t *r) {
 		return STU_ERROR;
 	}
 
-	rc = stu_flv_close(flv, ck->timestamp);
+	rc = stu_flv_close(flv);
 	if (rc == STU_ERROR) {
 		stu_log_error(0, "Failed to close flv: fd=%d.", nc->conn->fd);
 	}

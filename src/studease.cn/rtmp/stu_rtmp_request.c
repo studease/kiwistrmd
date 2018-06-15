@@ -54,8 +54,7 @@ static stu_int32_t  stu_rtmp_on_user_control(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_on_ack_window_size(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_on_bandwidth(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_on_edge(stu_rtmp_request_t *r);
-static stu_int32_t  stu_rtmp_on_audio(stu_rtmp_request_t *r);
-static stu_int32_t  stu_rtmp_on_video(stu_rtmp_request_t *r);
+static stu_int32_t  stu_rtmp_on_frame(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_on_data(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_on_shared_object(stu_rtmp_request_t *r);
 static stu_int32_t  stu_rtmp_on_command(stu_rtmp_request_t *r);
@@ -497,14 +496,24 @@ static stu_int32_t
 stu_rtmp_process_audio(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
 	stu_buf_t        *buf;
+	u_char           *pos;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	pos = buf->pos;
 
-	if (buf->last - buf->pos < 2) {
+	if (buf->last - buf->pos < 5) {
 		stu_log_error(0, "Failed to parse rtmp message of audio: Data not enough.");
 		return STU_ERROR;
 	}
+
+	r->frame_info.format = *pos >> 4;
+	r->frame_info.sample_rate = *pos >> 2;
+	r->frame_info.sample_size = *pos >> 1;
+	r->frame_info.channels = *pos;
+	pos++;
+
+	r->frame_info.data_type = *pos++;
 
 	return STU_OK;
 }
@@ -513,14 +522,22 @@ static stu_int32_t
 stu_rtmp_process_video(stu_rtmp_request_t *r) {
 	stu_rtmp_chunk_t *ck;
 	stu_buf_t        *buf;
+	u_char           *pos;
 
 	ck = r->chunk_in;
 	buf = &ck->payload;
+	pos = buf->pos;
 
-	if (buf->last - buf->pos < 2) {
+	if (buf->last - buf->pos < 5) {
 		stu_log_error(0, "Failed to parse rtmp message of video: Data not enough.");
 		return STU_ERROR;
 	}
+
+	r->frame_info.frame_type = *pos >> 4;
+	r->frame_info.codec = *pos;
+	pos++;
+
+	r->frame_info.data_type = *pos++;
 
 	return STU_OK;
 }
@@ -1517,11 +1534,8 @@ stu_rtmp_process_request(stu_rtmp_request_t *r) {
 
 	switch (ck->type_id) {
 	case STU_RTMP_MESSAGE_TYPE_AUDIO:
-		rc = stu_rtmp_on_audio(r);
-		break;
-
 	case STU_RTMP_MESSAGE_TYPE_VIDEO:
-		rc = stu_rtmp_on_video(r);
+		rc = stu_rtmp_on_frame(r);
 		break;
 
 	case STU_RTMP_MESSAGE_TYPE_COMMAND:
@@ -1617,7 +1631,7 @@ stu_rtmp_on_edge(stu_rtmp_request_t *r) {
 }
 
 static stu_int32_t
-stu_rtmp_on_audio(stu_rtmp_request_t *r) {
+stu_rtmp_on_frame(stu_rtmp_request_t *r) {
 	stu_rtmp_netconnection_t *nc;
 	stu_rtmp_netstream_t     *ns;
 	stu_rtmp_chunk_t         *ck;
@@ -1632,34 +1646,7 @@ stu_rtmp_on_audio(stu_rtmp_request_t *r) {
 		return STU_ERROR;
 	}
 
-	f = stu_rtmp_stream_append(ns->stream, ck->type_id, ck->timestamp, ck->payload.start, ck->payload.size);
-	if (f == NULL) {
-		stu_log_error(0, "Failed to append rtmp frame: fd=%d, ts=%u.", nc->conn->fd, ck->timestamp);
-		return STU_ERROR;
-	}
-
-	stu_rtmp_finalize_request(r, STU_DECLINED);
-
-	return STU_OK;
-}
-
-static stu_int32_t
-stu_rtmp_on_video(stu_rtmp_request_t *r) {
-	stu_rtmp_netconnection_t *nc;
-	stu_rtmp_netstream_t     *ns;
-	stu_rtmp_chunk_t         *ck;
-	stu_rtmp_frame_t         *f;
-
-	nc = &r->connection;
-	ck = r->chunk_in;
-
-	ns = stu_rtmp_find_netstream(r, ck->stream_id);
-	if (ns == NULL) {
-		stu_log_error(0, "rtmp net stream not found: fd=%d, id=%d.", nc->conn->fd, ck->stream_id);
-		return STU_ERROR;
-	}
-
-	f = stu_rtmp_stream_append(ns->stream, ck->type_id, ck->timestamp, ck->payload.start, ck->payload.size);
+	f = stu_rtmp_stream_append(ns->stream, ck->type_id, ck->timestamp, &r->frame_info, ck->payload.pos, ck->payload.last - ck->payload.pos);
 	if (f == NULL) {
 		stu_log_error(0, "Failed to append rtmp frame: fd=%d, ts=%u.", nc->conn->fd, ck->timestamp);
 		return STU_ERROR;

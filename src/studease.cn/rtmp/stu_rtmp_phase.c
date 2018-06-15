@@ -11,6 +11,7 @@ stu_hash_t  stu_rtmp_phases;
 
 stu_rtmp_phase_listener_t  stu_rtmp_phase_listeners[] = {
 	{ stu_string("flv"), stu_rtmp_phase_flv_handler, stu_rtmp_phase_flv_close },
+	{ stu_string("fmp4"), stu_rtmp_phase_fmp4_handler, stu_rtmp_phase_fmp4_close },
 	{ stu_null_string, NULL, NULL }
 };
 
@@ -34,6 +35,16 @@ stu_rtmp_phase_init() {
 		if (stu_rtmp_phase_add(&ph->pattern, ph->listeners) == STU_ERROR) {
 			return STU_ERROR;
 		}
+	}
+
+	if (stu_rtmp_phase_flv_init() == STU_ERROR) {
+		stu_log_error(0, "Failed to init rtmp phase flv.");
+		return STU_ERROR;
+	}
+
+	if (stu_rtmp_phase_fmp4_init() == STU_ERROR) {
+		stu_log_error(0, "Failed to init rtmp phase fmp4.");
+		return STU_ERROR;
 	}
 
 	return STU_OK;

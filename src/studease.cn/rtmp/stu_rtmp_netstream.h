@@ -51,8 +51,8 @@ stu_int32_t  stu_rtmp_send_status(stu_rtmp_netstream_t *ns, stu_str_t *level, st
 
 stu_int32_t  stu_rtmp_set_data_frame(stu_rtmp_netstream_t *ns, stu_str_t *key, stu_rtmp_amf_t *value, stu_bool_t remote);
 stu_int32_t  stu_rtmp_clear_data_frame(stu_rtmp_netstream_t *ns, stu_str_t *key, stu_bool_t remote);
-stu_int32_t  stu_rtmp_send_video_frame(stu_rtmp_netstream_t *ns, stu_uint32_t timestamp, u_char *data, size_t len);
-stu_int32_t  stu_rtmp_send_audio_frame(stu_rtmp_netstream_t *ns, stu_uint32_t timestamp, u_char *data, size_t len);
+stu_int32_t  stu_rtmp_send_video_frame(stu_rtmp_netstream_t *ns, stu_uint32_t timestamp, stu_rtmp_frame_info_t *info, u_char *data, size_t len);
+stu_int32_t  stu_rtmp_send_audio_frame(stu_rtmp_netstream_t *ns, stu_uint32_t timestamp, stu_rtmp_frame_info_t *info, u_char *data, size_t len);
 
 stu_int32_t  stu_rtmp_on_play(stu_rtmp_request_t *r);
 stu_int32_t  stu_rtmp_on_play2(stu_rtmp_request_t *r);

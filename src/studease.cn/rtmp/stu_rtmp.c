@@ -71,11 +71,6 @@ stu_rtmp_init() {
 		return STU_ERROR;
 	}
 
-	if (stu_rtmp_phase_flv_init() == STU_ERROR) {
-		stu_log_error(0, "Failed to init rtmp phase flv.");
-		return STU_ERROR;
-	}
-
 	// application
 	if (stu_rtmp_application_init_hash() == STU_ERROR) {
 		return STU_ERROR;

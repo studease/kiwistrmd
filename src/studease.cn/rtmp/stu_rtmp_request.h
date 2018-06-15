@@ -45,6 +45,7 @@ struct stu_rtmp_request_s {
 	stu_str_t                  *data_handler;
 	stu_str_t                  *data_key;
 	stu_rtmp_amf_t             *data_value;
+	stu_rtmp_frame_info_t       frame_info;
 
 	stu_rtmp_amf_t             *command_name;
 	stu_str_t                  *command;
