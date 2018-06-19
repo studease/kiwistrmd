@@ -7,12 +7,12 @@
 
 #include "stu_websocket.h"
 
-static stu_int32_t   stu_websocket_process_request_frame(stu_websocket_request_t *r);
-static stu_uint32_t  stu_websocket_read_request_buffer(stu_websocket_request_t *r);
-static stu_int32_t   stu_websocket_alloc_large_buffer(stu_websocket_request_t *r);
-static stu_int32_t   stu_websocket_filter_foreach_handler(stu_websocket_request_t *r, stu_str_t *pattern, stu_list_t *list);
-static void          stu_websocket_run_phases(stu_websocket_request_t *r);
-static void          stu_websocket_request_empty_handler(stu_websocket_request_t *r);
+static stu_int32_t  stu_websocket_process_request_frame(stu_websocket_request_t *r);
+static stu_int32_t  stu_websocket_read_request_buffer(stu_websocket_request_t *r);
+static stu_int32_t  stu_websocket_alloc_large_buffer(stu_websocket_request_t *r);
+static stu_int32_t  stu_websocket_filter_foreach_handler(stu_websocket_request_t *r, stu_str_t *pattern, stu_list_t *list);
+static void         stu_websocket_run_phases(stu_websocket_request_t *r);
+static void         stu_websocket_request_empty_handler(stu_websocket_request_t *r);
 
 extern stu_hash_t  stu_websocket_filter_hash;
 extern stu_list_t  stu_websocket_phases;
@@ -106,8 +106,7 @@ void
 stu_websocket_process_request_frames(stu_event_t *ev) {
 	stu_websocket_request_t *r;
 	stu_connection_t        *c;
-	stu_int32_t              rc, rv;
-	stu_uint64_t             n;
+	stu_int32_t              n, rc, rv;
 
 	c = ev->data;
 	r = c->request;
@@ -192,18 +191,12 @@ stu_websocket_process_request_frames(stu_event_t *ev) {
 	}
 }
 
-static stu_uint32_t
+static stu_int32_t
 stu_websocket_read_request_buffer(stu_websocket_request_t *r) {
 	stu_connection_t *c;
-	stu_uint32_t      n;
+	stu_int32_t       n;
 
 	c = r->connection;
-
-	n = r->frames_in.payload_data.last - r->frames_in.payload_data.pos;
-	if (n > 0) {
-		/* buffer remains */
-		return n;
-	}
 
 	if (r->frame_in->end == r->frame_in->last) {
 		r->frame_in->pos = r->frame_in->last = r->frame_in->start;

@@ -23,7 +23,7 @@ stu_log_init(stu_file_t *file) {
 		return STU_ERROR;
 	}
 
-	file->fd = stu_file_open(file->name.data, STU_FILE_APPEND, STU_FILE_CREATE_OR_OPEN, STU_FILE_DEFAULT_ACCESS);
+	file->fd = stu_file_open(file->name.data, STU_FILE_WRONLY|STU_FILE_APPEND, STU_FILE_CREATE_OR_OPEN, STU_FILE_DEFAULT_ACCESS);
 	if (file->fd == STU_FILE_INVALID) {
 		stu_log_error(stu_errno, "Failed to " stu_file_open_n " log file \"%s\".", file->name.data);
 		return STU_ERROR;

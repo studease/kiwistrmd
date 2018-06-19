@@ -390,12 +390,6 @@ stu_http_read_request_header(stu_http_request_t *r) {
 
 	c = r->connection;
 
-	n = r->header_in->last - r->header_in->pos;
-	if (n > 0) {
-		/* buffer remains */
-		return n;
-	}
-
 	if (r->header_in->end == r->header_in->last) {
 		r->header_in->pos = r->header_in->last = r->header_in->start;
 		stu_memzero(r->header_in->start, r->header_in->size);

@@ -388,7 +388,7 @@ stu_mp4_box(const char *type, u_char *data, size_t size, ...) {
 
 	stu_queue_init(&box->items);
 	stu_queue_init(&box->queue);
-	box->type = type;
+	box->type = (u_char *) type;
 	box->data = data;
 	box->data_size = box->size = size;
 

@@ -40,6 +40,7 @@
 #if (STU_WIN32)
 #include <mswsock.h>
 #include <winsock2.h>
+#include <iphlpapi.h>
 #endif
 
 #if !(STU_WIN32)

@@ -10,6 +10,6 @@
 
 #include "stu_utils.h"
 
-u_char *stu_hardware_get_hwaddr(u_char *dst);
+u_char *stu_hardware_get_macaddr(u_char *dst);
 
 #endif /* STUDEASE_CN_UTILS_STU_HARDWARE_H_ */

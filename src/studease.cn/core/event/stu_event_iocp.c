@@ -7,7 +7,7 @@
 
 #include "stu_event.h"
 
-extern stu_queue_t  stu_conn_freed;
+extern stu_connection_t  stu_free_connections;
 
 
 stu_fd_t
@@ -167,14 +167,22 @@ stu_event_iocp_process_events(stu_fd_t evfd, stu_msec_t timer, stu_uint32_t flag
 	}
 #endif
 
-	for (q = stu_queue_head(&stu_conn_freed); q != stu_queue_sentinel(&stu_conn_freed); /* void */) {
+	if (stu_mutex_trylock(&stu_free_connections.lock)) {
+		goto done;
+	}
+
+	for (q = stu_queue_head(&stu_free_connections.queue); q != stu_queue_sentinel(&stu_free_connections.queue); /* void */) {
 		c = stu_queue_data(q, stu_connection_t, queue);
 
 		q = stu_queue_next(q);
-		stu_queue_remove(q);
 
+		stu_queue_remove(&c->queue);
 		stu_connection_free(c);
 	}
+
+	stu_mutex_unlock(&stu_free_connections.lock);
+
+done:
 
 	return STU_OK;
 }

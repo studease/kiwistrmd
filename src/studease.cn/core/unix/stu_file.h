@@ -32,7 +32,7 @@ typedef struct {
 #define STU_FILE_CREATE_OR_OPEN   O_CREAT
 #define STU_FILE_OPEN             0
 #define STU_FILE_TRUNCATE        (O_CREAT | O_TRUNC)
-#define STU_FILE_APPEND          (O_WRONLY | O_APPEND)
+#define STU_FILE_APPEND           O_APPEND
 #define STU_FILE_NONBLOCK         O_NONBLOCK
 
 #if (STU_HAVE_OPENAT)

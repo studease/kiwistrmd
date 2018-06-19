@@ -8,12 +8,13 @@
 #include "../stu_config.h"
 #include "stu_core.h"
 
-stu_queue_t  stu_conn_freed;
+stu_connection_t  stu_free_connections;
 
 
 stu_int32_t
 stu_connection_init() {
-	stu_queue_init(&stu_conn_freed);
+	stu_mutex_init(&stu_free_connections.lock, NULL);
+	stu_queue_init(&stu_free_connections.queue);
 	return STU_OK;
 }
 
@@ -114,6 +115,7 @@ stu_connection_get(stu_socket_t s) {
 		return NULL;
 	}
 
+	stu_mutex_init(&c->lock, NULL);
 	stu_queue_init(&c->queue);
 
 	c->fd = s;
@@ -157,7 +159,10 @@ stu_connection_close(stu_connection_t *c) {
 	stu_log_debug(3, "freed connection: c=%p, fd=%d.", c, fd);
 
 	c->destroyed = TRUE;
-	stu_queue_insert_tail(&stu_conn_freed, &c->queue);
+
+	stu_mutex_lock(&stu_free_connections.lock);
+	stu_queue_insert_tail(&stu_free_connections.queue, &c->queue);
+	stu_mutex_unlock(&stu_free_connections.lock);
 }
 
 void
