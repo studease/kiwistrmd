@@ -1,7 +1,7 @@
 /*
  * stu_config.h
  *
- *  Created on: 2017骞�10鏈�20鏃�
+ *  Created on: 2017年10月20日
  *      Author: Tony Lau
  */
 
